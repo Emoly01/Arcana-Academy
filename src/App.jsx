@@ -269,31 +269,49 @@ function pickDistractors(correct, pool, count = 3) {
   return shuffle(pool.filter(c => c.id !== correct.id)).slice(0, count);
 }
 
-function generateQuestion(card, pool, mode) {
+function generateQuestion(card, pool, mode, orientationFilter = "both") {
   const distractors = pickDistractors(card, pool);
+
+  // Helper: pick orientation based on filter
+  const pickOrientation = () => {
+    if (orientationFilter === "upright") return true;
+    if (orientationFilter === "reversed") return false;
+    return Math.random() > 0.5;
+  };
 
   if (mode === "mixed") {
     const modes = ["card-to-meaning", "meaning-to-card", "upright-reversed", "free-type"];
-    return generateQuestion(card, pool, modes[Math.floor(Math.random() * modes.length)]);
+    return generateQuestion(card, pool, modes[Math.floor(Math.random() * modes.length)], orientationFilter);
   }
 
   if (mode === "card-to-meaning") {
+    const isUpright = pickOrientation();
+    const meanings = isUpright ? card.upright : card.reversed;
+    const distractorMeanings = (d) => isUpright ? d.upright : d.reversed;
     const options = shuffle([
-      { id: card.id, text: card.upright.slice(0, 3).join(", "), correct: true },
-      ...distractors.map(d => ({ id: d.id, text: d.upright.slice(0, 3).join(", "), correct: false })),
+      { id: card.id, text: meanings.slice(0, 3).join(", "), correct: true },
+      ...distractors.map(d => ({ id: d.id, text: distractorMeanings(d).slice(0, 3).join(", "), correct: false })),
     ]);
-    return { type: "card-to-meaning", prompt: card.name, subtitle: card.numeral || card.suit || "", card, options };
+    const orientLabel = orientationFilter !== "both" ? "" : ` (${isUpright ? "Upright" : "Reversed"})`;
+    return { type: "card-to-meaning", prompt: card.name + orientLabel, subtitle: card.numeral || card.suit || "", card, options, isUpright };
   }
 
   if (mode === "meaning-to-card") {
+    const isUpright = pickOrientation();
+    const meanings = isUpright ? card.upright : card.reversed;
     const options = shuffle([
       { id: card.id, text: card.name, correct: true },
       ...distractors.map(d => ({ id: d.id, text: d.name, correct: false })),
     ]);
-    return { type: "meaning-to-card", prompt: card.upright.slice(0, 3).join(", "), subtitle: card.keywords, card, options };
+    const orientLabel = orientationFilter !== "both" ? "" : (isUpright ? " (Upright)" : " (Reversed)");
+    return { type: "meaning-to-card", prompt: meanings.slice(0, 3).join(", "), subtitle: card.keywords + orientLabel, card, options, isUpright };
   }
 
   if (mode === "upright-reversed") {
+    // This mode only makes sense with "both" — if locked to one, fall back to card-to-meaning
+    if (orientationFilter !== "both") {
+      return generateQuestion(card, pool, "card-to-meaning", orientationFilter);
+    }
     const isUpright = Math.random() > 0.5;
     const correctMeanings = isUpright ? card.upright : card.reversed;
     const wrongMeanings = isUpright ? card.reversed : card.upright;
@@ -307,12 +325,15 @@ function generateQuestion(card, pool, mode) {
 
   if (mode === "spread") {
     const spreadCards = shuffle(pool).slice(0, 3);
-    const orientations = spreadCards.map(() => Math.random() > 0.5 ? "Upright" : "Reversed");
+    const orientations = spreadCards.map(() => {
+      if (orientationFilter === "upright") return "Upright";
+      if (orientationFilter === "reversed") return "Reversed";
+      return Math.random() > 0.5 ? "Upright" : "Reversed";
+    });
     const positions = ["Past", "Present", "Future"];
 
     const getMeanings = (card, ori) => ori === "Upright" ? card.upright : card.reversed;
 
-    // Build the correct narrative from all three cards
     const pastM = getMeanings(spreadCards[0], orientations[0]);
     const presentM = getMeanings(spreadCards[1], orientations[1]);
     const futureM = getMeanings(spreadCards[2], orientations[2]);
@@ -324,7 +345,6 @@ function generateQuestion(card, pool, mode) {
     ];
     const correctNarrative = narrativeTemplates[Math.floor(Math.random() * narrativeTemplates.length)];
 
-    // Generate wrong narratives by mixing in meanings from other cards
     const wrongCards = shuffle(pool.filter(c => !spreadCards.find(sc => sc.id === c.id))).slice(0, 6);
     const wrongNarratives = [
       `The past was defined by ${getMeanings(wrongCards[0], "Upright")[0].toLowerCase()} and ${getMeanings(wrongCards[1], "Upright")[1].toLowerCase()}, leading to present ${presentM[0].toLowerCase()}. The future suggests ${getMeanings(wrongCards[2], "Upright")[0].toLowerCase()}.`,
@@ -337,7 +357,6 @@ function generateQuestion(card, pool, mode) {
       ...wrongNarratives.slice(0, 3).map((n, i) => ({ id: `wrong-${i}`, text: n, correct: false })),
     ]);
 
-    // Use the middle card (Present) for SRS tracking
     return {
       type: "spread",
       prompt: `${positions[0]}: ${spreadCards[0].name} (${orientations[0]})  ·  ${positions[1]}: ${spreadCards[1].name} (${orientations[1]})  ·  ${positions[2]}: ${spreadCards[2].name} (${orientations[2]})`,
@@ -350,7 +369,7 @@ function generateQuestion(card, pool, mode) {
   }
 
   if (mode === "free-type") {
-    const isUpright = Math.random() > 0.5;
+    const isUpright = pickOrientation();
     return {
       type: "free-type",
       prompt: card.name,
@@ -360,7 +379,7 @@ function generateQuestion(card, pool, mode) {
     };
   }
 
-  return generateQuestion(card, pool, "card-to-meaning");
+  return generateQuestion(card, pool, "card-to-meaning", orientationFilter);
 }
 
 // ─── FIRESTORE SYNC ───
@@ -458,6 +477,7 @@ export default function App() {
   const inputRef = useRef(null);
   // Deck filter for quizzes
   const [quizDeck, setQuizDeck] = useState("all");
+  const [quizOrientation, setQuizOrientation] = useState("both");
 
   useEffect(() => {
     if (cloudData && !synced) {
@@ -505,11 +525,11 @@ export default function App() {
     const due = pool.filter(c => getCardSRS(c.id).nextReview <= now);
     const sorted = due.length > 0 ? shuffle(due) : shuffle(pool);
     setSessionCorrect(0); setSessionTotal(0); setCurrentStreak(0);
-    const q = generateQuestion(sorted[0], pool, mode);
+    const q = generateQuestion(sorted[0], pool, mode, quizOrientation);
     setCurrentQ(q);
     setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null);
     setScreen("quiz");
-  }, [getQuizPool, quizDeck, getCardSRS]);
+  }, [getQuizPool, quizDeck, quizOrientation, getCardSRS]);
 
   const recordAnswer = useCallback((correct, cardId) => {
     setSessionTotal(p => p + 1);
@@ -546,9 +566,9 @@ export default function App() {
     const now = Date.now();
     const due = pool.filter(c => getCardSRS(c.id).nextReview <= now && c.id !== currentQ?.card?.id);
     const next = due.length > 0 ? due[Math.floor(Math.random() * due.length)] : pool[Math.floor(Math.random() * pool.length)];
-    setCurrentQ(generateQuestion(next, pool, quizMode));
+    setCurrentQ(generateQuestion(next, pool, quizMode, quizOrientation));
     setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null);
-  }, [getQuizPool, quizDeck, getCardSRS, currentQ, quizMode]);
+  }, [getQuizPool, quizDeck, quizOrientation, getCardSRS, currentQ, quizMode]);
 
   const endQuiz = useCallback(() => {
     const ns = totalSessions + 1;
@@ -759,6 +779,23 @@ export default function App() {
                   ))}
                 </div>
               </div>
+
+              {/* Orientation Filter */}
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.35)", letterSpacing: 1, marginBottom: 8 }}>ORIENTATION</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {[
+                    { key: "both", label: "Both" },
+                    { key: "upright", label: "↑ Upright" },
+                    { key: "reversed", label: "↓ Reversed" },
+                  ].map(f => (
+                    <button key={f.key} className={`filter-btn ${quizOrientation === f.key ? "active" : ""}`} onClick={() => setQuizOrientation(f.key)}>
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {[
                   { mode: "card-to-meaning", icon: "🃏", title: "Card → Meaning", desc: "See the card, pick its keywords" },
@@ -796,11 +833,21 @@ export default function App() {
               <div style={{ padding: "4px 12px", borderRadius: 20, fontFamily: "'Cinzel', serif", fontSize: 12, letterSpacing: 1, background: currentStreak > 0 ? "rgba(201,168,76,0.12)" : "rgba(255,255,255,0.05)", color: currentStreak > 0 ? "#c9a84c" : "rgba(255,255,255,0.3)" }}>🔥 {currentStreak}</div>
               <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.5)" }}>{sessionCorrect}/{sessionTotal}</div>
             </div>
-            {quizDeck !== "all" && (
-              <div style={{ textAlign: "center", marginBottom: 18 }}>
-                <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.3)", letterSpacing: 1, padding: "3px 10px", borderRadius: 10, background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.08)" }}>
-                  {quizDeck === "major" ? "MAJOR ARCANA" : quizDeck === "minor" ? "MINOR ARCANA" : quizDeck.toUpperCase()}
-                </span>
+            {(quizDeck !== "all" || quizOrientation !== "both") && (
+              <div style={{ textAlign: "center", marginBottom: 18, display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
+                {quizDeck !== "all" && (
+                  <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.3)", letterSpacing: 1, padding: "3px 10px", borderRadius: 10, background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.08)" }}>
+                    {quizDeck === "major" ? "MAJOR ARCANA" : quizDeck === "minor" ? "MINOR ARCANA" : quizDeck.toUpperCase()}
+                  </span>
+                )}
+                {quizOrientation !== "both" && (
+                  <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, letterSpacing: 1, padding: "3px 10px", borderRadius: 10, border: "1px solid rgba(201,168,76,0.08)",
+                    color: quizOrientation === "upright" ? "rgba(76,175,80,0.5)" : "rgba(220,53,69,0.5)",
+                    background: quizOrientation === "upright" ? "rgba(76,175,80,0.06)" : "rgba(220,53,69,0.06)",
+                  }}>
+                    {quizOrientation === "upright" ? "↑ UPRIGHT ONLY" : "↓ REVERSED ONLY"}
+                  </span>
+                )}
               </div>
             )}
 
