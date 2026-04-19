@@ -478,6 +478,7 @@ export default function App() {
   // Deck filter for quizzes
   const [quizDeck, setQuizDeck] = useState("all");
   const [quizOrientation, setQuizOrientation] = useState("both");
+  const resultShownAt = useRef(0);
 
   useEffect(() => {
     if (cloudData && !synced) {
@@ -549,6 +550,7 @@ export default function App() {
     if (showResult) return;
     setSelectedAnswer(option);
     setShowResult(true);
+    resultShownAt.current = Date.now();
     recordAnswer(option.correct, currentQ.card.id);
   }, [showResult, currentQ, recordAnswer]);
 
@@ -557,7 +559,8 @@ export default function App() {
     const result = scoreTypedAnswer(typedInput, currentQ.card, currentQ.isUpright);
     setTypeResult(result);
     setShowResult(true);
-    const correct = result.score >= 0.4; // At least 2/5 or 40% to count as "correct"
+    resultShownAt.current = Date.now();
+    const correct = result.score >= 0.4;
     recordAnswer(correct, currentQ.card.id);
   }, [showResult, typedInput, currentQ, recordAnswer]);
 
@@ -624,8 +627,9 @@ export default function App() {
         return;
       }
 
-      // After answering: Enter or Space → next question
+      // After answering: Enter or Space → next question (with debounce to let you read results)
       if (showResult && (e.key === "Enter" || e.key === " ")) {
+        if (Date.now() - resultShownAt.current < 500) return; // Don't skip too fast
         e.preventDefault();
         nextQuestion();
         return;
