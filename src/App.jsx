@@ -614,6 +614,52 @@ export default function App() {
     }
   }, [currentQ, showResult]);
 
+  // Keyboard shortcuts for quiz
+  useEffect(() => {
+    if (screen !== "quiz" || !currentQ) return;
+
+    const handleKeyDown = (e) => {
+      // Don't capture keys when typing in free-type textarea
+      if (currentQ.type === "free-type" && !showResult && document.activeElement === inputRef.current) {
+        return;
+      }
+
+      // After answering: Enter or Space → next question
+      if (showResult && (e.key === "Enter" || e.key === " ")) {
+        e.preventDefault();
+        nextQuestion();
+        return;
+      }
+
+      // Multiple choice: a/b/c/d or 1/2/3/4 to select answer
+      if (!showResult && currentQ.type !== "free-type" && currentQ.options) {
+        const keyMap = { "a": 0, "b": 1, "c": 2, "d": 3, "1": 0, "2": 1, "3": 2, "4": 3 };
+        const idx = keyMap[e.key.toLowerCase()];
+        if (idx !== undefined && idx < currentQ.options.length) {
+          e.preventDefault();
+          handleAnswer(currentQ.options[idx]);
+          return;
+        }
+      }
+
+      // Free-type: Enter to submit (when not in textarea)
+      if (!showResult && currentQ.type === "free-type" && e.key === "Enter") {
+        e.preventDefault();
+        handleTypeSubmit();
+        return;
+      }
+
+      // Escape to end quiz
+      if (e.key === "Escape") {
+        e.preventDefault();
+        endQuiz();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [screen, currentQ, showResult, nextQuestion, handleAnswer, handleTypeSubmit, endQuiz]);
+
   // ─── SIGN-IN SCREEN ───
   if (authLoading) {
     return (
@@ -691,6 +737,8 @@ export default function App() {
         .option-btn:hover:not(:disabled) { background: rgba(201,168,76,0.12); border-color: rgba(201,168,76,0.4); transform: translateX(4px); }
         .option-btn.correct { background: rgba(76,175,80,0.15); border-color: rgba(76,175,80,0.5); animation: correctPulse 0.6s ease-out; }
         .option-btn.wrong { background: rgba(220,53,69,0.15); border-color: rgba(220,53,69,0.5); animation: wrongShake 0.4s ease; }
+        .kbd-hint { display: none; }
+        @media (hover: hover) and (pointer: fine) { .kbd-hint { display: inline; } }
         .nav-btn { padding: 12px 28px; border-radius: 10px; font-family: 'Cinzel', serif; font-size: 13px; font-weight: 500; letter-spacing: 1px; cursor: pointer; transition: all 0.3s ease; text-transform: uppercase; }
         .nav-btn-primary { background: linear-gradient(135deg, rgba(201,168,76,0.25), rgba(201,168,76,0.1)); border: 1px solid rgba(201,168,76,0.4); color: #c9a84c; }
         .nav-btn-primary:hover { background: linear-gradient(135deg, rgba(201,168,76,0.35), rgba(201,168,76,0.15)); box-shadow: 0 4px 20px rgba(201,168,76,0.2); transform: translateY(-2px); }
@@ -919,7 +967,13 @@ export default function App() {
                     onClick={() => handleAnswer(opt)}
                     disabled={showResult}
                   >
-                    <span style={{ opacity: 0.4, marginRight: 10, fontFamily: "'Cinzel', serif", fontSize: 11 }}>{String.fromCharCode(65 + i)}</span>
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      width: 22, height: 22, marginRight: 10,
+                      fontFamily: "'Cinzel', serif", fontSize: 11, opacity: 0.4,
+                      borderRadius: 4, border: "1px solid rgba(201,168,76,0.1)",
+                      background: "rgba(201,168,76,0.03)", flexShrink: 0,
+                    }}>{String.fromCharCode(65 + i)}</span>
                     {opt.text}
                   </button>
                 ))}
@@ -986,7 +1040,7 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={nextQuestion}>Next Card →</button>
+                <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={nextQuestion}>Next Card → <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span></button>
               </div>
             )}
 
@@ -1006,7 +1060,7 @@ export default function App() {
                     Reversed: {currentQ.card.reversed.join(", ")}
                   </div>
                 </div>
-                <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={nextQuestion}>Next Card →</button>
+                <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={nextQuestion}>Next Card → <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span></button>
               </div>
             )}
           </div>
