@@ -332,7 +332,17 @@ function generateQuestion(card, pool, mode, orientationFilter = "both") {
     
     // Sort meanings: ones with high hit counts are "known", low/zero are "gaps"
     const sorted = meanings.map((m, i) => ({ meaning: m, index: i, hits: hits[i] || 0 }));
-    sorted.sort((a, b) => b.hits - a.hits);
+    const hasData = sorted.some(s => s.hits > 0);
+    
+    if (hasData) {
+      sorted.sort((a, b) => b.hits - a.hits);
+    } else {
+      // No data yet — shuffle randomly so you see different subsets each time
+      for (let i = sorted.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [sorted[i], sorted[j]] = [sorted[j], sorted[i]];
+      }
+    }
     
     // Show top meanings as known, hide the rest as gaps
     // At least 1 gap, at most all-1 known
@@ -1015,7 +1025,7 @@ export default function App() {
             </div>
 
             {/* Multiple choice options */}
-            {currentQ.type !== "free-type" && (
+            {currentQ.type !== "free-type" && currentQ.type !== "fill-gaps" && currentQ.options && (
               <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
                 {currentQ.options.map((opt, i) => (
                   <button
@@ -1167,7 +1177,7 @@ export default function App() {
             )}
 
             {/* MC result feedback */}
-            {currentQ.type !== "free-type" && showResult && (
+            {currentQ.type !== "free-type" && currentQ.type !== "fill-gaps" && showResult && (
               <div style={{ animation: "fadeUp 0.3s ease-out" }}>
                 <div style={{
                   padding: 16, background: selectedAnswer?.correct ? "rgba(76,175,80,0.08)" : "rgba(220,53,69,0.08)",
