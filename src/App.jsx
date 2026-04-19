@@ -280,7 +280,7 @@ function generateQuestion(card, pool, mode, orientationFilter = "both") {
   };
 
   if (mode === "mixed") {
-    const modes = ["card-to-meaning", "meaning-to-card", "upright-reversed", "free-type"];
+    const modes = ["card-to-meaning", "meaning-to-card", "upright-reversed", "free-type", "fill-gaps"];
     return generateQuestion(card, pool, modes[Math.floor(Math.random() * modes.length)], orientationFilter);
   }
 
@@ -323,48 +323,41 @@ function generateQuestion(card, pool, mode, orientationFilter = "both") {
     return { type: "upright-reversed", prompt: `${card.name} — ${isUpright ? "Upright" : "Reversed"}`, subtitle: `What does this card mean when ${isUpright ? "upright" : "reversed"}?`, card, options, isUpright };
   }
 
-  if (mode === "spread") {
-    const spreadCards = shuffle(pool).slice(0, 3);
-    const orientations = spreadCards.map(() => {
-      if (orientationFilter === "upright") return "Upright";
-      if (orientationFilter === "reversed") return "Reversed";
-      return Math.random() > 0.5 ? "Upright" : "Reversed";
-    });
-    const positions = ["Past", "Present", "Future"];
-
-    const getMeanings = (card, ori) => ori === "Upright" ? card.upright : card.reversed;
-
-    const pastM = getMeanings(spreadCards[0], orientations[0]);
-    const presentM = getMeanings(spreadCards[1], orientations[1]);
-    const futureM = getMeanings(spreadCards[2], orientations[2]);
-
-    const narrativeTemplates = [
-      `The past held ${pastM[0].toLowerCase()} and ${pastM[1].toLowerCase()}, which shaped the current experience of ${presentM[0].toLowerCase()}. Looking ahead, the path leads toward ${futureM[0].toLowerCase()} and ${futureM[1].toLowerCase()}.`,
-      `A foundation of ${pastM[0].toLowerCase()} (${spreadCards[0].name}) gives way to ${presentM[0].toLowerCase()} and ${presentM[1].toLowerCase()} in the present. The future calls for ${futureM[0].toLowerCase()}.`,
-      `Coming from a place of ${pastM[0].toLowerCase()}, the querent now faces ${presentM[0].toLowerCase()} and ${presentM[1].toLowerCase()}. The reading points toward ${futureM[0].toLowerCase()} and ${futureM[1].toLowerCase()} ahead.`,
-    ];
-    const correctNarrative = narrativeTemplates[Math.floor(Math.random() * narrativeTemplates.length)];
-
-    const wrongCards = shuffle(pool.filter(c => !spreadCards.find(sc => sc.id === c.id))).slice(0, 6);
-    const wrongNarratives = [
-      `The past was defined by ${getMeanings(wrongCards[0], "Upright")[0].toLowerCase()} and ${getMeanings(wrongCards[1], "Upright")[1].toLowerCase()}, leading to present ${presentM[0].toLowerCase()}. The future suggests ${getMeanings(wrongCards[2], "Upright")[0].toLowerCase()}.`,
-      `Starting from ${pastM[0].toLowerCase()}, the present shows ${getMeanings(wrongCards[3], "Reversed")[0].toLowerCase()} and ${getMeanings(wrongCards[4], "Reversed")[1].toLowerCase()}. Ahead lies ${getMeanings(wrongCards[5], "Upright")[0].toLowerCase()}.`,
-      `A journey from ${getMeanings(wrongCards[0], "Reversed")[0].toLowerCase()} through ${getMeanings(wrongCards[1], "Upright")[0].toLowerCase()} toward ${futureM[0].toLowerCase()} and ${getMeanings(wrongCards[2], "Reversed")[0].toLowerCase()}.`,
-    ];
-
-    const options = shuffle([
-      { id: "correct", text: correctNarrative, correct: true },
-      ...wrongNarratives.slice(0, 3).map((n, i) => ({ id: `wrong-${i}`, text: n, correct: false })),
-    ]);
-
+  if (mode === "fill-gaps") {
+    const isUpright = pickOrientation();
+    const meanings = isUpright ? card.upright : card.reversed;
+    // Use meaningHits to find which meanings the user knows vs doesn't
+    const srsKey = `${card.id}_${isUpright ? "u" : "r"}`;
+    const hits = card._meaningHits?.[srsKey] || {};
+    
+    // Sort meanings: ones with high hit counts are "known", low/zero are "gaps"
+    const sorted = meanings.map((m, i) => ({ meaning: m, index: i, hits: hits[i] || 0 }));
+    sorted.sort((a, b) => b.hits - a.hits);
+    
+    // Show top meanings as known, hide the rest as gaps
+    // At least 1 gap, at most all-1 known
+    const totalMeanings = meanings.length;
+    let knownCount = sorted.filter(s => s.hits >= 2).length;
+    knownCount = Math.min(knownCount, totalMeanings - 1); // Always at least 1 gap
+    knownCount = Math.max(knownCount, 0);
+    
+    // If no data yet (all zeros), show 2 known and hide the rest randomly
+    if (knownCount === 0 && totalMeanings > 2) {
+      knownCount = 2;
+    }
+    
+    const known = sorted.slice(0, knownCount);
+    const gaps = sorted.slice(knownCount);
+    
     return {
-      type: "spread",
-      prompt: `${positions[0]}: ${spreadCards[0].name} (${orientations[0]})  ·  ${positions[1]}: ${spreadCards[1].name} (${orientations[1]})  ·  ${positions[2]}: ${spreadCards[2].name} (${orientations[2]})`,
-      subtitle: "Which narrative best captures this spread's story?",
-      card: spreadCards[1],
-      spreadCards,
-      orientations,
-      options,
+      type: "fill-gaps",
+      prompt: card.name,
+      subtitle: `${isUpright ? "Upright" : "Reversed"} — fill in the ${gaps.length} missing meaning${gaps.length > 1 ? "s" : ""}`,
+      card,
+      isUpright,
+      knownMeanings: known.map(k => k.meaning),
+      gapMeanings: gaps.map(g => g.meaning),
+      gapIndices: gaps.map(g => g.index),
     };
   }
 
@@ -526,11 +519,13 @@ export default function App() {
     const due = pool.filter(c => getCardSRS(c.id).nextReview <= now);
     const sorted = due.length > 0 ? shuffle(due) : shuffle(pool);
     setSessionCorrect(0); setSessionTotal(0); setCurrentStreak(0);
-    const q = generateQuestion(sorted[0], pool, mode, quizOrientation);
+    // Attach meaningHits data to the card for fill-gaps mode
+    const cardWithHits = { ...sorted[0], _meaningHits: srsData[sorted[0].id]?.meaningHits || {} };
+    const q = generateQuestion(cardWithHits, pool, mode, quizOrientation);
     setCurrentQ(q);
     setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null);
     setScreen("quiz");
-  }, [getQuizPool, quizDeck, quizOrientation, getCardSRS]);
+  }, [getQuizPool, quizDeck, quizOrientation, getCardSRS, srsData]);
 
   const recordAnswer = useCallback((correct, cardId) => {
     setSessionTotal(p => p + 1);
@@ -556,22 +551,85 @@ export default function App() {
 
   const handleTypeSubmit = useCallback(() => {
     if (showResult || !typedInput.trim()) return;
-    const result = scoreTypedAnswer(typedInput, currentQ.card, currentQ.isUpright);
+    
+    const isFillGaps = currentQ.type === "fill-gaps";
+    const targetMeanings = isFillGaps ? currentQ.gapMeanings : (currentQ.isUpright ? currentQ.card.upright : currentQ.card.reversed);
+    const allMeanings = currentQ.isUpright ? currentQ.card.upright : currentQ.card.reversed;
+    
+    // Score against target meanings
+    const inputParts = typedInput.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+    const matched = [];
+    const used = new Set();
+    for (const part of inputParts) {
+      let bestMatch = null;
+      let bestScore = 0;
+      for (let i = 0; i < targetMeanings.length; i++) {
+        if (used.has(i)) continue;
+        const s = fuzzyMatch(part, targetMeanings[i]);
+        if (s > bestScore && s >= 0.5) { bestScore = s; bestMatch = i; }
+      }
+      if (bestMatch !== null) {
+        matched.push({ input: part, meaning: targetMeanings[bestMatch], score: bestScore });
+        used.add(bestMatch);
+      }
+    }
+    const missed = targetMeanings.filter((_, i) => !used.has(i));
+    const score = targetMeanings.length > 0 ? matched.length / targetMeanings.length : 0;
+    
+    const result = { score, matched, missed, total: targetMeanings.length };
     setTypeResult(result);
     setShowResult(true);
     resultShownAt.current = Date.now();
-    const correct = result.score >= 0.4;
-    recordAnswer(correct, currentQ.card.id);
-  }, [showResult, typedInput, currentQ, recordAnswer]);
+    const correct = score >= 0.4;
+    
+    // Update per-meaning hits
+    const srsKey = `${currentQ.card.id}_${currentQ.isUpright ? "u" : "r"}`;
+    setSrsData(prev => {
+      const cardSrs = prev[currentQ.card.id] || getInitialSRS();
+      const meaningHits = { ...(cardSrs.meaningHits || {}) };
+      if (!meaningHits[srsKey]) meaningHits[srsKey] = {};
+      
+      // For free-type: track all meanings
+      // For fill-gaps: only track the gap meanings, but also count known ones
+      if (isFillGaps) {
+        // Known meanings stay counted, update gap meanings
+        currentQ.gapMeanings.forEach((m, gi) => {
+          const globalIdx = allMeanings.indexOf(m);
+          if (matched.find(mt => mt.meaning === m)) {
+            meaningHits[srsKey][globalIdx] = (meaningHits[srsKey][globalIdx] || 0) + 1;
+          }
+        });
+      } else {
+        // Free-type: track all
+        allMeanings.forEach((m, i) => {
+          if (matched.find(mt => mt.meaning === m)) {
+            meaningHits[srsKey][i] = (meaningHits[srsKey][i] || 0) + 1;
+          }
+        });
+      }
+      
+      const updated = { ...prev, [currentQ.card.id]: updateSRS({ ...cardSrs, meaningHits }, correct) };
+      const newBest = correct ? Math.max(bestStreak, currentStreak + 1) : bestStreak;
+      saveRef(updated, unlockedMinor, newBest, totalSessions);
+      return updated;
+    });
+    
+    setSessionTotal(p => p + 1);
+    if (correct) {
+      setSessionCorrect(p => p + 1);
+      setCurrentStreak(p => { const ns = p + 1; setBestStreak(b => Math.max(b, ns)); return ns; });
+    } else { setCurrentStreak(0); }
+  }, [showResult, typedInput, currentQ, bestStreak, currentStreak, unlockedMinor, totalSessions, saveRef, getCardSRS]);
 
   const nextQuestion = useCallback(() => {
     const pool = getQuizPool(quizDeck);
     const now = Date.now();
     const due = pool.filter(c => getCardSRS(c.id).nextReview <= now && c.id !== currentQ?.card?.id);
     const next = due.length > 0 ? due[Math.floor(Math.random() * due.length)] : pool[Math.floor(Math.random() * pool.length)];
-    setCurrentQ(generateQuestion(next, pool, quizMode, quizOrientation));
+    const nextWithHits = { ...next, _meaningHits: srsData[next.id]?.meaningHits || {} };
+    setCurrentQ(generateQuestion(nextWithHits, pool, quizMode, quizOrientation));
     setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null);
-  }, [getQuizPool, quizDeck, quizOrientation, getCardSRS, currentQ, quizMode]);
+  }, [getQuizPool, quizDeck, quizOrientation, getCardSRS, currentQ, quizMode, srsData]);
 
   const endQuiz = useCallback(() => {
     const ns = totalSessions + 1;
@@ -610,9 +668,9 @@ export default function App() {
     return "#c9a84c";
   };
 
-  // Focus input on free-type questions
+  // Focus input on free-type and fill-gaps questions
   useEffect(() => {
-    if (currentQ?.type === "free-type" && inputRef.current && !showResult) {
+    if ((currentQ?.type === "free-type" || currentQ?.type === "fill-gaps") && inputRef.current && !showResult) {
       setTimeout(() => inputRef.current?.focus(), 300);
     }
   }, [currentQ, showResult]);
@@ -622,8 +680,8 @@ export default function App() {
     if (screen !== "quiz" || !currentQ) return;
 
     const handleKeyDown = (e) => {
-      // Don't capture keys when typing in free-type textarea
-      if (currentQ.type === "free-type" && !showResult && document.activeElement === inputRef.current) {
+      // Don't capture keys when typing in free-type/fill-gaps textarea
+      if ((currentQ.type === "free-type" || currentQ.type === "fill-gaps") && !showResult && document.activeElement === inputRef.current) {
         return;
       }
 
@@ -646,8 +704,8 @@ export default function App() {
         }
       }
 
-      // Free-type: Enter to submit (when not in textarea)
-      if (!showResult && currentQ.type === "free-type" && e.key === "Enter") {
+      // Free-type/fill-gaps: Enter to submit (when not in textarea)
+      if (!showResult && (currentQ.type === "free-type" || currentQ.type === "fill-gaps") && e.key === "Enter") {
         e.preventDefault();
         handleTypeSubmit();
         return;
@@ -854,7 +912,7 @@ export default function App() {
                   { mode: "meaning-to-card", icon: "🔮", title: "Meaning → Card", desc: "Read the meaning, name the card" },
                   { mode: "upright-reversed", icon: "⚖", title: "Upright vs Reversed", desc: "Know the difference" },
                   { mode: "free-type", icon: "✍", title: "Free Recall", desc: "Type meanings from memory — no hints" },
-                  { mode: "spread", icon: "✧", title: "Read the Spread", desc: "Pick the narrative that fits a 3-card spread" },
+                  { mode: "fill-gaps", icon: "🧩", title: "Fill the Gaps", desc: "We show what you know — type what you don't" },
                   { mode: "mixed", icon: "🌙", title: "Mixed Practice", desc: "All modes, spaced repetition" },
                 ].map(m => (
                   <div key={m.mode} className="mode-card" onClick={() => startQuiz(m.mode)}>
@@ -904,54 +962,49 @@ export default function App() {
             )}
 
             {/* Question Card */}
-            <div style={{ padding: currentQ.type === "spread" ? 20 : 28, background: "linear-gradient(160deg, rgba(201,168,76,0.06), rgba(201,168,76,0.02))", border: "1px solid rgba(201,168,76,0.15)", borderRadius: 20, marginBottom: 24, textAlign: "center", animation: "cardReveal 0.5s ease-out" }}>
+            <div style={{ padding: 28, background: "linear-gradient(160deg, rgba(201,168,76,0.06), rgba(201,168,76,0.02))", border: "1px solid rgba(201,168,76,0.15)", borderRadius: 20, marginBottom: 24, textAlign: "center", animation: "cardReveal 0.5s ease-out" }}>
               <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.4)", letterSpacing: 2, marginBottom: 12, textTransform: "uppercase" }}>
                 {currentQ.type === "card-to-meaning" && "What does this card mean?"}
                 {currentQ.type === "meaning-to-card" && "Which card matches?"}
                 {currentQ.type === "upright-reversed" && "Choose the correct meaning"}
-                {currentQ.type === "spread" && "What story do these cards tell?"}
                 {currentQ.type === "free-type" && "Free recall"}
+                {currentQ.type === "fill-gaps" && "Fill the gaps"}
               </div>
 
-              {/* Spread: show 3 cards visually */}
-              {currentQ.type === "spread" && currentQ.spreadCards && (
-                <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 14 }}>
-                  {currentQ.spreadCards.map((sc, i) => (
-                    <div key={i} style={{
-                      flex: "1 1 0", maxWidth: 140, padding: "12px 8px",
-                      background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.12)",
-                      borderRadius: 12, textAlign: "center",
-                    }}>
-                      <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 9, color: "rgba(201,168,76,0.4)", letterSpacing: 1, marginBottom: 6 }}>
-                        {["PAST", "PRESENT", "FUTURE"][i]}
-                      </div>
-                      {sc.id < 22 && (
-                        <div style={{ fontSize: 22, marginBottom: 4, color: "#c9a84c", opacity: 0.7 }}>
-                          {CARD_SYMBOLS[sc.id] || "✦"}
-                        </div>
-                      )}
-                      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, fontWeight: 600, color: "#e8dcc8", marginBottom: 4, lineHeight: 1.3 }}>
-                        {sc.name}
-                      </div>
-                      <div style={{
-                        fontFamily: "'Raleway', sans-serif", fontSize: 10, fontWeight: 400,
-                        color: currentQ.orientations[i] === "Upright" ? "rgba(76,175,80,0.6)" : "rgba(220,53,69,0.6)",
-                      }}>
-                        {currentQ.orientations[i] === "Reversed" ? "↓ " : "↑ "}{currentQ.orientations[i]}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {currentQ.type !== "spread" && currentQ.card.id < 22 && currentQ.type !== "meaning-to-card" && (
+              {currentQ.card.id < 22 && currentQ.type !== "meaning-to-card" && (
                 <div style={{ fontSize: 40, marginBottom: 8, filter: "drop-shadow(0 0 8px rgba(201,168,76,0.3))", color: "#c9a84c" }}>
                   {CARD_SYMBOLS[currentQ.card.id] || "✦"}
                 </div>
               )}
-              {currentQ.type !== "spread" && (
+              {currentQ.type !== "fill-gaps" && (
                 <div style={{ fontFamily: "'Cinzel', serif", fontSize: 22, fontWeight: 600, color: "#e8dcc8", marginBottom: 8, lineHeight: 1.5 }}>
                   {currentQ.prompt}
+                </div>
+              )}
+              {currentQ.type === "fill-gaps" && (
+                <div>
+                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 22, fontWeight: 600, color: "#e8dcc8", marginBottom: 14, lineHeight: 1.5 }}>
+                    {currentQ.prompt}
+                  </div>
+                  {/* Show known meanings */}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", marginBottom: 10 }}>
+                    {currentQ.knownMeanings.map((m, i) => (
+                      <span key={i} style={{
+                        padding: "5px 12px", borderRadius: 8, fontSize: 13,
+                        fontFamily: "'Raleway', sans-serif", fontWeight: 400,
+                        background: "rgba(76,175,80,0.1)", border: "1px solid rgba(76,175,80,0.2)",
+                        color: "rgba(76,175,80,0.7)",
+                      }}>✓ {m}</span>
+                    ))}
+                    {currentQ.gapMeanings.map((_, i) => (
+                      <span key={`gap-${i}`} style={{
+                        padding: "5px 12px", borderRadius: 8, fontSize: 13,
+                        fontFamily: "'Raleway', sans-serif", fontWeight: 400,
+                        background: "rgba(201,168,76,0.06)", border: "1px dashed rgba(201,168,76,0.25)",
+                        color: "rgba(201,168,76,0.4)",
+                      }}>???</span>
+                    ))}
+                  </div>
                 </div>
               )}
               {currentQ.subtitle && (
@@ -1003,6 +1056,71 @@ export default function App() {
                 <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.3)", marginTop: 8, textAlign: "center" }}>
                   Press Enter to submit · Separate meanings with commas
                 </div>
+              </div>
+            )}
+
+            {/* Fill the gaps input */}
+            {currentQ.type === "fill-gaps" && !showResult && (
+              <div style={{ marginBottom: 20 }}>
+                <textarea
+                  ref={inputRef}
+                  className="type-input"
+                  placeholder={`Type the ${currentQ.gapMeanings.length} missing meaning${currentQ.gapMeanings.length > 1 ? "s" : ""}, separated by commas...`}
+                  value={typedInput}
+                  onChange={(e) => setTypedInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleTypeSubmit(); } }}
+                  style={{ minHeight: 60 }}
+                />
+                <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+                  <button className="nav-btn nav-btn-primary" style={{ flex: 1 }} onClick={handleTypeSubmit} disabled={!typedInput.trim()}>
+                    Check Answer
+                  </button>
+                </div>
+                <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.3)", marginTop: 8, textAlign: "center" }}>
+                  Press Enter to submit · Separate meanings with commas
+                </div>
+              </div>
+            )}
+
+            {/* Fill-gaps result */}
+            {currentQ.type === "fill-gaps" && showResult && typeResult && (
+              <div style={{ animation: "fadeUp 0.3s ease-out" }}>
+                <div style={{
+                  padding: 18, borderRadius: 14, marginBottom: 16,
+                  background: typeResult.score >= 0.4 ? "rgba(76,175,80,0.08)" : "rgba(220,53,69,0.08)",
+                  border: `1px solid ${typeResult.score >= 0.4 ? "rgba(76,175,80,0.2)" : "rgba(220,53,69,0.2)"}`,
+                }}>
+                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 16, color: typeResult.score >= 0.4 ? "#4caf50" : "#dc3545", marginBottom: 10, fontWeight: 600 }}>
+                    {typeResult.score >= 1 ? "✦ Perfect!" : typeResult.score >= 0.4 ? "✦ Getting there!" : "✕ Keep at it"}
+                    <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, fontWeight: 300, marginLeft: 8, opacity: 0.7 }}>
+                      {typeResult.matched.length}/{typeResult.total} gaps filled
+                    </span>
+                  </div>
+
+                  {typeResult.matched.length > 0 && (
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "rgba(76,175,80,0.6)", letterSpacing: 1, marginBottom: 6 }}>YOU FILLED</div>
+                      {typeResult.matched.map((m, i) => (
+                        <div key={i} style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(76,175,80,0.8)", marginBottom: 4, fontWeight: 300 }}>
+                          ✓ {m.meaning}
+                          {m.score < 1 && <span style={{ opacity: 0.5, fontSize: 11 }}> (you typed: {m.input})</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {typeResult.missed.length > 0 && (
+                    <div>
+                      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "rgba(220,53,69,0.6)", letterSpacing: 1, marginBottom: 6 }}>STILL MISSING</div>
+                      {typeResult.missed.map((m, i) => (
+                        <div key={i} style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(220,53,69,0.6)", marginBottom: 4, fontWeight: 300 }}>
+                          ✗ {m}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={nextQuestion}>Next Card → <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span></button>
               </div>
             )}
 
