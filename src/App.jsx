@@ -1436,7 +1436,10 @@ export default function App() {
                   {ALL_MINOR.filter(c => c.suit === suit).map(card => {
                     const srs = getCardSRS(card.id); const mastery = getMasteryLevel(srs);
                     const colors = ["rgba(255,255,255,0.05)", "rgba(220,53,69,0.3)", "rgba(201,168,76,0.2)", "rgba(76,175,80,0.3)", "rgba(201,168,76,0.5)"];
-                    return <div key={card.id} title={`${card.name} — ${mastery.label}`} style={{ width: "100%", aspectRatio: "1", borderRadius: 4, background: colors[mastery.level], cursor: "pointer" }} onClick={() => { setStudyCard(card); setShowDescription(false); setScreen("study"); }} />;
+                    const n = card.name.split(" ")[0];
+                    const numMap = { "Ace": "A", "Two": "2", "Three": "3", "Four": "4", "Five": "5", "Six": "6", "Seven": "7", "Eight": "8", "Nine": "9", "Ten": "10", "Page": "P", "Knight": "Kn", "Queen": "Q", "King": "K" };
+                    const label = numMap[n] || n.charAt(0);
+                    return <div key={card.id} title={`${card.name} — ${mastery.label}`} style={{ width: "100%", aspectRatio: "1", borderRadius: 4, background: colors[mastery.level], cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontFamily: "'Cinzel', serif", fontWeight: 600, color: mastery.level > 0 ? "#e8dcc8" : "rgba(255,255,255,0.2)" }} onClick={() => { setStudyCard(card); setShowDescription(false); setScreen("study"); }}>{label}</div>;
                   })}
                 </div>
               </div>
