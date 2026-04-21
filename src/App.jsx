@@ -670,6 +670,81 @@ export default function App() {
     return { total, attempted, mastered, struggling };
   }, [availableCards, srsData]);
 
+  // ─── DAILY FOCUS ───
+  const dailyFocus = useMemo(() => {
+    // All possible focus combos
+    const baseFocuses = [
+      { deck: "major", orientation: "upright", label: "Major Arcana — Upright", icon: "☉" },
+      { deck: "major", orientation: "reversed", label: "Major Arcana — Reversed", icon: "☾" },
+    ];
+    const minorFocuses = unlockedMinor ? [
+      { deck: "wands", orientation: "upright", label: "Wands — Upright", icon: "🔥" },
+      { deck: "wands", orientation: "reversed", label: "Wands — Reversed", icon: "🔥" },
+      { deck: "cups", orientation: "upright", label: "Cups — Upright", icon: "💧" },
+      { deck: "cups", orientation: "reversed", label: "Cups — Reversed", icon: "💧" },
+      { deck: "swords", orientation: "upright", label: "Swords — Upright", icon: "🌬" },
+      { deck: "swords", orientation: "reversed", label: "Swords — Reversed", icon: "🌬" },
+      { deck: "pentacles", orientation: "upright", label: "Pentacles — Upright", icon: "🪙" },
+      { deck: "pentacles", orientation: "reversed", label: "Pentacles — Reversed", icon: "🪙" },
+      { deck: "minor", orientation: "both", label: "All Minor — Both", icon: "✦" },
+    ] : [];
+    const allFocuses = [...baseFocuses, ...minorFocuses];
+
+    // Score each combo: how many struggling/unseen cards it has
+    const scored = allFocuses.map(f => {
+      const pool = f.deck === "major" ? MAJOR_ARCANA
+        : f.deck === "minor" ? ALL_MINOR
+        : f.deck === "wands" ? ALL_MINOR.filter(c => c.suit === "Wands")
+        : f.deck === "cups" ? ALL_MINOR.filter(c => c.suit === "Cups")
+        : f.deck === "swords" ? ALL_MINOR.filter(c => c.suit === "Swords")
+        : ALL_MINOR.filter(c => c.suit === "Pentacles");
+
+      let needsWork = 0;
+      pool.forEach(c => {
+        const srs = srsData[c.id];
+        if (!srs || srs.totalAttempts === 0) { needsWork += 2; return; }
+        const mastery = getMasteryLevel(srs);
+        if (mastery.level <= 1) needsWork += 3;
+        else if (mastery.level === 2) needsWork += 1;
+      });
+      return { ...f, needsWork };
+    });
+
+    // Use today's date as a seed, but bias toward combos that need more work
+    const today = new Date();
+    const daySeed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+
+    // Sort by needsWork descending, then use day seed to pick among the top candidates
+    scored.sort((a, b) => b.needsWork - a.needsWork);
+    // Pick from top 3 (or all if fewer), rotating by day
+    const topN = Math.min(3, scored.length);
+    const pick = scored[daySeed % topN];
+    return pick;
+  }, [srsData, unlockedMinor]);
+
+  const startDailyFocus = useCallback(() => {
+    setQuizDeck(dailyFocus.deck);
+    setQuizOrientation(dailyFocus.orientation);
+    // Small delay to let state update, then start
+    setTimeout(() => {
+      const pool = dailyFocus.deck === "major" ? [...MAJOR_ARCANA]
+        : dailyFocus.deck === "minor" ? [...ALL_MINOR]
+        : dailyFocus.deck === "wands" ? ALL_MINOR.filter(c => c.suit === "Wands")
+        : dailyFocus.deck === "cups" ? ALL_MINOR.filter(c => c.suit === "Cups")
+        : dailyFocus.deck === "swords" ? ALL_MINOR.filter(c => c.suit === "Swords")
+        : ALL_MINOR.filter(c => c.suit === "Pentacles");
+      const now = Date.now();
+      const due = pool.filter(c => getCardSRS(c.id).nextReview <= now);
+      const sorted = due.length > 0 ? shuffle(due) : shuffle(pool);
+      setQuizMode("mixed");
+      setSessionCorrect(0); setSessionTotal(0); setCurrentStreak(0);
+      const cardWithHits = { ...sorted[0], _meaningHits: srsData[sorted[0].id]?.meaningHits || {} };
+      setCurrentQ(generateQuestion(cardWithHits, pool, "mixed", dailyFocus.orientation));
+      setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null);
+      setScreen("quiz");
+    }, 0);
+  }, [dailyFocus, getCardSRS, srsData]);
+
   const cardFaceStyle = (card) => {
     if (card.suit === "Wands") return "#e85d26";
     if (card.suit === "Cups") return "#4a90d9";
@@ -872,6 +947,29 @@ export default function App() {
               <div onClick={handleUnlockMinor} style={{ padding: "16px 20px", background: "linear-gradient(135deg, rgba(201,168,76,0.12), rgba(201,168,76,0.04))", border: "1px solid rgba(201,168,76,0.35)", borderRadius: 14, marginBottom: 24, cursor: "pointer", textAlign: "center", animation: "pulse 2s ease-in-out infinite" }}>
                 <div style={{ fontFamily: "'Cinzel', serif", fontSize: 14, color: "#c9a84c", letterSpacing: 1, marginBottom: 4 }}>✦ UNLOCK MINOR ARCANA ✦</div>
                 <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.6)" }}>You've learned 15+ Major Arcana — tap to unlock all 78 cards</div>
+              </div>
+            )}
+
+            {/* Daily Focus */}
+            {dailyFocus && (
+              <div onClick={startDailyFocus} style={{
+                padding: "18px 20px", marginBottom: 20, cursor: "pointer", borderRadius: 16,
+                background: "linear-gradient(135deg, rgba(201,168,76,0.08), rgba(201,168,76,0.02))",
+                border: "1px solid rgba(201,168,76,0.2)",
+                transition: "all 0.3s ease",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 12,
+                    background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.15)",
+                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0,
+                  }}>{dailyFocus.icon}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.4)", letterSpacing: 1, marginBottom: 4 }}>TODAY'S FOCUS</div>
+                    <div style={{ fontFamily: "'Cinzel', serif", fontSize: 15, color: "#e8dcc8", fontWeight: 500 }}>{dailyFocus.label}</div>
+                  </div>
+                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "#c9a84c", opacity: 0.6 }}>GO →</div>
+                </div>
               </div>
             )}
 
@@ -1245,7 +1343,11 @@ export default function App() {
                 return (
                   <div key={card.id} className="study-card" onClick={() => { setStudyCard(card); setShowDescription(false); }}>
                     <div style={{ width: 36, height: 36, borderRadius: 8, flexShrink: 0, background: `${accent}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: card.id < 22 ? 18 : 12, color: accent, fontFamily: "'Cinzel', serif", fontWeight: 600 }}>
-                      {card.id < 22 ? (CARD_SYMBOLS[card.id] || "✦") : card.name.split(" ")[0].charAt(0)}
+                      {card.id < 22 ? (CARD_SYMBOLS[card.id] || "✦") : (() => {
+                        const n = card.name.split(" ")[0];
+                        const numMap = { "Ace": "A", "Two": "2", "Three": "3", "Four": "4", "Five": "5", "Six": "6", "Seven": "7", "Eight": "8", "Nine": "9", "Ten": "10", "Page": "P", "Knight": "Kn", "Queen": "Q", "King": "K" };
+                        return numMap[n] || n.charAt(0);
+                      })()}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontFamily: "'Cinzel', serif", fontSize: 14, fontWeight: 500, color: "#e8dcc8" }}>{card.name}</div>
