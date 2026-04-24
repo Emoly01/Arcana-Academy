@@ -760,9 +760,34 @@ export default function App() {
     }
   }, [currentQ, showResult]);
 
+  // Keyboard shortcuts for study detail (arrow keys)
+  useEffect(() => {
+    if (screen !== "study" || !studyCard) return;
+
+    const handleKeyDown = (e) => {
+      const idx = studyCards.findIndex(c => c.id === studyCard.id);
+      if (e.key === "ArrowLeft" && idx > 0) {
+        e.preventDefault();
+        setStudyCard(studyCards[idx - 1]);
+        setShowDescription(false);
+      } else if (e.key === "ArrowRight" && idx < studyCards.length - 1) {
+        e.preventDefault();
+        setStudyCard(studyCards[idx + 1]);
+        setShowDescription(false);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        setStudyCard(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [screen, studyCard, studyCards]);
+
   // Keyboard shortcuts for quiz
   useEffect(() => {
     if (screen !== "quiz" || !currentQ) return;
+
 
     const handleKeyDown = (e) => {
       // Don't capture keys when typing in free-type/fill-gaps textarea
@@ -1391,6 +1416,33 @@ export default function App() {
                 <div style={{ fontFamily: "'Crimson Text', serif", fontSize: 14, color: "rgba(201,168,76,0.7)", fontStyle: "italic" }}>{studyCard.keywords}</div>
               </div>
             )}
+
+            {/* Prev / Next navigation */}
+            {(() => {
+              const idx = studyCards.findIndex(c => c.id === studyCard.id);
+              const prev = idx > 0 ? studyCards[idx - 1] : null;
+              const next = idx < studyCards.length - 1 ? studyCards[idx + 1] : null;
+              return (
+                <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+                  <button
+                    className="nav-btn nav-btn-ghost"
+                    style={{ flex: 1, opacity: prev ? 1 : 0.3, pointerEvents: prev ? "auto" : "none", fontSize: 11, padding: "10px 14px" }}
+                    onClick={() => { if (prev) { setStudyCard(prev); setShowDescription(false); } }}
+                  >
+                    ← {prev ? prev.name : ""}
+                    <span className="kbd-hint" style={{ opacity: 0.4, fontSize: 9, display: "block", marginTop: 2, textTransform: "none", letterSpacing: 0, fontFamily: "'Raleway', sans-serif" }}>[←]</span>
+                  </button>
+                  <button
+                    className="nav-btn nav-btn-ghost"
+                    style={{ flex: 1, opacity: next ? 1 : 0.3, pointerEvents: next ? "auto" : "none", fontSize: 11, padding: "10px 14px" }}
+                    onClick={() => { if (next) { setStudyCard(next); setShowDescription(false); } }}
+                  >
+                    {next ? next.name : ""} →
+                    <span className="kbd-hint" style={{ opacity: 0.4, fontSize: 9, display: "block", marginTop: 2, textTransform: "none", letterSpacing: 0, fontFamily: "'Raleway', sans-serif" }}>[→]</span>
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         )}
 
