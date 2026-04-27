@@ -160,6 +160,32 @@ const CARD_SYMBOLS = {
   15: "♑", 16: "♂", 17: "♒", 18: "♓", 19: "☉", 20: "♇", 21: "♄",
 };
 
+// ─── CARD CONNECTIONS ───
+const CARD_CONNECTIONS = {
+  0: [{ id: 21, reason: "Journey's start ↔ journey's end" }, { id: 1, reason: "Potential meets willpower" }],
+  1: [{ id: 0, reason: "Willpower channels potential" }, { id: 2, reason: "Conscious action ↔ subconscious knowing" }, { id: 15, reason: "Mastery ↔ manipulation" }],
+  2: [{ id: 1, reason: "Intuition ↔ action" }, { id: 18, reason: "Both guard the subconscious" }, { id: 11, reason: "Hidden truth ↔ revealed truth" }],
+  3: [{ id: 4, reason: "The divine feminine ↔ masculine" }, { id: 19, reason: "Both radiate warmth and abundance" }],
+  4: [{ id: 3, reason: "Structure ↔ nurture" }, { id: 5, reason: "Earthly authority ↔ spiritual authority" }, { id: 16, reason: "Rigid structures the Tower destroys" }],
+  5: [{ id: 4, reason: "Spiritual ↔ earthly authority" }, { id: 9, reason: "Traditional path ↔ solitary path" }],
+  6: [{ id: 14, reason: "Both about alignment and balance" }, { id: 15, reason: "Love ↔ bondage — choosing freely vs chains" }],
+  7: [{ id: 8, reason: "Outer will ↔ inner strength" }, { id: 11, reason: "Victory through control ↔ truth" }],
+  8: [{ id: 7, reason: "Quiet power ↔ forceful will" }, { id: 14, reason: "Both require patience and balance" }],
+  9: [{ id: 2, reason: "Both seek hidden knowledge" }, { id: 5, reason: "Solitary wisdom ↔ institutional wisdom" }, { id: 18, reason: "Both walk the dark path alone" }],
+  10: [{ id: 13, reason: "Both about inevitable cycles" }, { id: 21, reason: "Both about completion and cycles" }],
+  11: [{ id: 2, reason: "Revealed truth ↔ hidden truth" }, { id: 20, reason: "Earthly judgment ↔ cosmic judgment" }],
+  12: [{ id: 13, reason: "Surrender leads to transformation" }, { id: 17, reason: "Letting go leads to hope" }],
+  13: [{ id: 12, reason: "Sacrifice precedes transformation" }, { id: 16, reason: "Gradual ending ↔ sudden ending" }, { id: 10, reason: "Part of the great cycle" }],
+  14: [{ id: 6, reason: "Both seek harmony" }, { id: 8, reason: "Patience and gentle mastery" }],
+  15: [{ id: 6, reason: "Bondage ↔ free choice" }, { id: 1, reason: "Shadow of the Magician" }, { id: 16, reason: "What you won't release, the Tower takes" }],
+  16: [{ id: 15, reason: "Destroying what the Devil built" }, { id: 17, reason: "Destruction precedes hope" }, { id: 13, reason: "Sudden change ↔ gradual change" }],
+  17: [{ id: 16, reason: "Hope after destruction" }, { id: 18, reason: "Clarity before confusion" }, { id: 19, reason: "Quiet hope ↔ blazing joy" }],
+  18: [{ id: 17, reason: "Confusion follows clarity" }, { id: 2, reason: "Both swim in the subconscious" }, { id: 9, reason: "Both walk dark paths" }],
+  19: [{ id: 18, reason: "Light after darkness" }, { id: 3, reason: "Both embody abundance and joy" }, { id: 17, reason: "Blazing joy ↔ quiet hope" }],
+  20: [{ id: 11, reason: "Cosmic ↔ earthly judgment" }, { id: 13, reason: "Rebirth after death" }],
+  21: [{ id: 0, reason: "End meets beginning" }, { id: 10, reason: "Completion of the cycle" }],
+};
+
 // ─── SRS ───
 function getInitialSRS() {
   return { interval: 1, ease: 2.5, nextReview: 0, streak: 0, totalCorrect: 0, totalAttempts: 0 };
@@ -473,6 +499,10 @@ export default function App() {
   const [showDescription, setShowDescription] = useState(false);
   const [animateIn, setAnimateIn] = useState(false);
   const [studyFilter, setStudyFilter] = useState("major");
+  const [studySort, setStudySort] = useState("default"); // "default" | "weakest"
+  const [personalNotes, setPersonalNotes] = useState({});
+  const [editingNote, setEditingNote] = useState(false);
+  const [noteText, setNoteText] = useState("");
   const [synced, setSynced] = useState(false);
   // Free-type state
   const [typedInput, setTypedInput] = useState("");
@@ -489,13 +519,14 @@ export default function App() {
       setUnlockedMinor(cloudData.unlockedMinor || false);
       setBestStreak(cloudData.bestStreak || 0);
       setTotalSessions(cloudData.totalSessions || 0);
+      setPersonalNotes(cloudData.personalNotes || {});
       setSynced(true);
     }
   }, [cloudData, synced]);
 
-  const saveRef = useCallback((newSrs, newUnlocked, newBest, newSessions) => {
-    save({ srsData: newSrs, unlockedMinor: newUnlocked, bestStreak: newBest, totalSessions: newSessions });
-  }, [save]);
+  const saveRef = useCallback((newSrs, newUnlocked, newBest, newSessions, newNotes) => {
+    save({ srsData: newSrs, unlockedMinor: newUnlocked, bestStreak: newBest, totalSessions: newSessions, personalNotes: newNotes || personalNotes });
+  }, [save, personalNotes]);
 
   useEffect(() => {
     setAnimateIn(false);
@@ -753,6 +784,13 @@ export default function App() {
     return "#c9a84c";
   };
 
+  const saveNote = useCallback((cardId, text) => {
+    const newNotes = { ...personalNotes, [cardId]: text };
+    if (!text.trim()) delete newNotes[cardId];
+    setPersonalNotes(newNotes);
+    saveRef(srsData, unlockedMinor, bestStreak, totalSessions, newNotes);
+  }, [personalNotes, srsData, unlockedMinor, bestStreak, totalSessions, saveRef]);
+
   // Focus input on free-type and fill-gaps questions
   useEffect(() => {
     if ((currentQ?.type === "free-type" || currentQ?.type === "fill-gaps") && inputRef.current && !showResult) {
@@ -765,24 +803,34 @@ export default function App() {
     if (screen !== "study" || !studyCard) return;
 
     const handleKeyDown = (e) => {
+      // Don't capture when editing notes
+      if (editingNote) return;
+      
       const idx = studyCards.findIndex(c => c.id === studyCard.id);
       if (e.key === "ArrowLeft" && idx > 0) {
         e.preventDefault();
-        setStudyCard(studyCards[idx - 1]);
+        const prev = studyCards[idx - 1];
+        setStudyCard(prev);
         setShowDescription(false);
+        setEditingNote(false);
+        setNoteText(personalNotes[prev.id] || "");
       } else if (e.key === "ArrowRight" && idx < studyCards.length - 1) {
         e.preventDefault();
-        setStudyCard(studyCards[idx + 1]);
+        const next = studyCards[idx + 1];
+        setStudyCard(next);
         setShowDescription(false);
+        setEditingNote(false);
+        setNoteText(personalNotes[next.id] || "");
       } else if (e.key === "Escape") {
         e.preventDefault();
         setStudyCard(null);
+        setEditingNote(false);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [screen, studyCard, studyCards]);
+  }, [screen, studyCard, studyCards, editingNote, personalNotes]);
 
   // Keyboard shortcuts for quiz
   useEffect(() => {
@@ -1357,30 +1405,63 @@ export default function App() {
               <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 14px", fontSize: 11 }} onClick={() => setScreen("home")}>← Back</button>
               <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 18, fontWeight: 500, letterSpacing: 2, color: "#c9a84c" }}>Study</h2>
             </div>
-            <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
               {[{ key: "major", label: "Major Arcana" }, ...(unlockedMinor ? [{ key: "wands", label: "Wands" }, { key: "cups", label: "Cups" }, { key: "swords", label: "Swords" }, { key: "pentacles", label: "Pentacles" }] : [])].map(f => (
                 <button key={f.key} className={`filter-btn ${studyFilter === f.key ? "active" : ""}`} onClick={() => setStudyFilter(f.key)}>{f.label}</button>
               ))}
             </div>
+            {/* Smart sort toggle */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
+              <button className={`filter-btn ${studySort === "default" ? "active" : ""}`} onClick={() => setStudySort("default")} style={{ fontSize: 11 }}>📋 All Cards</button>
+              <button className={`filter-btn ${studySort === "weakest" ? "active" : ""}`} onClick={() => setStudySort("weakest")} style={{ fontSize: 11, borderColor: studySort === "weakest" ? "rgba(220,53,69,0.4)" : undefined, color: studySort === "weakest" ? "rgba(220,53,69,0.8)" : undefined, background: studySort === "weakest" ? "rgba(220,53,69,0.1)" : undefined }}>🔻 Needs Review</button>
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {studyCards.map(card => {
-                const srs = getCardSRS(card.id); const mastery = getMasteryLevel(srs); const accent = cardFaceStyle(card);
-                return (
-                  <div key={card.id} className="study-card" onClick={() => { setStudyCard(card); setShowDescription(false); }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 8, flexShrink: 0, background: `${accent}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: card.id < 22 ? 18 : 12, color: accent, fontFamily: "'Cinzel', serif", fontWeight: 600 }}>
-                      {card.id < 22 ? (CARD_SYMBOLS[card.id] || "✦") : (() => {
-                        const n = card.name.split(" ")[0];
-                        const numMap = { "Ace": "A", "Two": "2", "Three": "3", "Four": "4", "Five": "5", "Six": "6", "Seven": "7", "Eight": "8", "Nine": "9", "Ten": "10", "Page": "P", "Knight": "Kn", "Queen": "Q", "King": "K" };
-                        return numMap[n] || n.charAt(0);
-                      })()}
+              {(() => {
+                let cards = [...studyCards];
+                if (studySort === "weakest") {
+                  cards = cards.filter(c => {
+                    const srs = srsData[c.id];
+                    if (!srs || srs.totalAttempts === 0) return true;
+                    return getMasteryLevel(srs).level <= 2;
+                  });
+                  cards.sort((a, b) => {
+                    const sa = srsData[a.id]; const sb = srsData[b.id];
+                    const la = sa ? getMasteryLevel(sa).level : 0;
+                    const lb = sb ? getMasteryLevel(sb).level : 0;
+                    return la - lb;
+                  });
+                }
+                if (cards.length === 0) {
+                  return (
+                    <div style={{ textAlign: "center", padding: 32 }}>
+                      <div style={{ fontSize: 32, marginBottom: 12 }}>✨</div>
+                      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 16, color: "#c9a84c", marginBottom: 6 }}>All caught up!</div>
+                      <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.5)", fontWeight: 300 }}>No cards need review in this group right now.</div>
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 14, fontWeight: 500, color: "#e8dcc8" }}>{card.name}</div>
-                      <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", fontWeight: 300 }}>{card.element} · {mastery.icon} {mastery.label}</div>
+                  );
+                }
+                return cards.map(card => {
+                  const srs = getCardSRS(card.id); const mastery = getMasteryLevel(srs); const accent = cardFaceStyle(card);
+                  const hasNote = !!personalNotes[card.id];
+                  return (
+                    <div key={card.id} className="study-card" onClick={() => { setStudyCard(card); setShowDescription(false); setEditingNote(false); setNoteText(personalNotes[card.id] || ""); }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 8, flexShrink: 0, background: `${accent}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: card.id < 22 ? 18 : 12, color: accent, fontFamily: "'Cinzel', serif", fontWeight: 600 }}>
+                        {card.id < 22 ? (CARD_SYMBOLS[card.id] || "✦") : (() => {
+                          const n = card.name.split(" ")[0];
+                          const numMap = { "Ace": "A", "Two": "2", "Three": "3", "Four": "4", "Five": "5", "Six": "6", "Seven": "7", "Eight": "8", "Nine": "9", "Ten": "10", "Page": "P", "Knight": "Kn", "Queen": "Q", "King": "K" };
+                          return numMap[n] || n.charAt(0);
+                        })()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 14, fontWeight: 500, color: "#e8dcc8" }}>
+                          {card.name} {hasNote && <span style={{ fontSize: 10, opacity: 0.4 }}>📝</span>}
+                        </div>
+                        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", fontWeight: 300 }}>{card.element} · {mastery.icon} {mastery.label}</div>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
           </div>
         )}
@@ -1388,7 +1469,7 @@ export default function App() {
         {/* ═══ STUDY DETAIL ═══ */}
         {screen === "study" && studyCard && (
           <div>
-            <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 14px", fontSize: 11, marginBottom: 20 }} onClick={() => setStudyCard(null)}>← Back to list</button>
+            <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 14px", fontSize: 11, marginBottom: 20 }} onClick={() => { setStudyCard(null); setEditingNote(false); }}>← Back to list</button>
             <div style={{ padding: 28, background: "linear-gradient(160deg, rgba(201,168,76,0.06), rgba(201,168,76,0.02))", border: "1px solid rgba(201,168,76,0.15)", borderRadius: 20, textAlign: "center", marginBottom: 24 }}>
               {studyCard.id < 22 && <div style={{ fontSize: 48, marginBottom: 12, color: "#c9a84c", filter: "drop-shadow(0 0 12px rgba(201,168,76,0.3))" }}>{CARD_SYMBOLS[studyCard.id] || "✦"}</div>}
               <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: 22, fontWeight: 600, color: "#e8dcc8", marginBottom: 4 }}>{studyCard.name}</h3>
@@ -1400,6 +1481,8 @@ export default function App() {
                 </div>
               )}
             </div>
+
+            {/* Upright / Reversed */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div style={{ padding: 18, background: "rgba(76,175,80,0.04)", border: "1px solid rgba(76,175,80,0.12)", borderRadius: 14 }}>
                 <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "rgba(76,175,80,0.6)", letterSpacing: 1, marginBottom: 10 }}>UPRIGHT</div>
@@ -1410,12 +1493,105 @@ export default function App() {
                 {studyCard.reversed.map((m, i) => <div key={i} style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(232,220,200,0.7)", marginBottom: 6, fontWeight: 300 }}>· {m}</div>)}
               </div>
             </div>
+
+            {/* Keywords */}
             {studyCard.keywords && (
               <div style={{ marginTop: 16, padding: 14, background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.1)", borderRadius: 12, textAlign: "center" }}>
                 <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "rgba(201,168,76,0.4)", letterSpacing: 1, marginBottom: 6 }}>KEYWORDS</div>
                 <div style={{ fontFamily: "'Crimson Text', serif", fontSize: 14, color: "rgba(201,168,76,0.7)", fontStyle: "italic" }}>{studyCard.keywords}</div>
               </div>
             )}
+
+            {/* Card Connections */}
+            {CARD_CONNECTIONS[studyCard.id] && CARD_CONNECTIONS[studyCard.id].length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "rgba(201,168,76,0.4)", letterSpacing: 1, marginBottom: 10 }}>CONNECTED CARDS</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {CARD_CONNECTIONS[studyCard.id].map((conn, i) => {
+                    const linkedCard = ALL_CARDS.find(c => c.id === conn.id);
+                    if (!linkedCard) return null;
+                    return (
+                      <div key={i} onClick={() => { setStudyCard(linkedCard); setShowDescription(false); setEditingNote(false); setNoteText(personalNotes[linkedCard.id] || ""); }}
+                        style={{
+                          padding: "12px 14px", borderRadius: 12, cursor: "pointer",
+                          background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.1)",
+                          transition: "all 0.2s ease", display: "flex", alignItems: "center", gap: 12,
+                        }}>
+                        <div style={{
+                          width: 32, height: 32, borderRadius: 8,
+                          background: "rgba(201,168,76,0.08)", display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 16, color: "#c9a84c", flexShrink: 0,
+                        }}>{CARD_SYMBOLS[linkedCard.id] || "✦"}</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 500, color: "#e8dcc8" }}>{linkedCard.name}</div>
+                          <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", fontWeight: 300, fontStyle: "italic" }}>{conn.reason}</div>
+                        </div>
+                        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.3)" }}>→</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Personal Notes */}
+            <div style={{ marginTop: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "rgba(201,168,76,0.4)", letterSpacing: 1 }}>YOUR NOTES</div>
+                {!editingNote && (
+                  <button onClick={() => { setEditingNote(true); setNoteText(personalNotes[studyCard.id] || ""); }}
+                    style={{ background: "none", border: "none", fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.5)", cursor: "pointer", padding: "2px 6px" }}>
+                    {personalNotes[studyCard.id] ? "✏ edit" : "+ add note"}
+                  </button>
+                )}
+              </div>
+              {!editingNote && personalNotes[studyCard.id] && (
+                <div style={{
+                  padding: 14, borderRadius: 12,
+                  background: "rgba(139,92,246,0.04)", border: "1px solid rgba(139,92,246,0.12)",
+                }}>
+                  <div style={{ fontFamily: "'Crimson Text', serif", fontSize: 14, color: "rgba(232,220,200,0.7)", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+                    {personalNotes[studyCard.id]}
+                  </div>
+                </div>
+              )}
+              {!editingNote && !personalNotes[studyCard.id] && (
+                <div onClick={() => { setEditingNote(true); setNoteText(""); }}
+                  style={{ padding: 14, borderRadius: 12, background: "rgba(201,168,76,0.02)", border: "1px dashed rgba(201,168,76,0.12)", cursor: "pointer", textAlign: "center" }}>
+                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.25)", fontWeight: 300 }}>
+                    Tap to add personal associations, mnemonics, or reading notes...
+                  </div>
+                </div>
+              )}
+              {editingNote && (
+                <div>
+                  <textarea
+                    className="type-input"
+                    placeholder="Your personal notes about this card...&#10;e.g. mnemonics, readings where it appeared, personal associations"
+                    value={noteText}
+                    onChange={(e) => setNoteText(e.target.value)}
+                    style={{ minHeight: 80, marginBottom: 8 }}
+                    autoFocus
+                  />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="nav-btn nav-btn-primary" style={{ flex: 1, padding: "8px 16px", fontSize: 11 }}
+                      onClick={() => { saveNote(studyCard.id, noteText); setEditingNote(false); }}>
+                      Save
+                    </button>
+                    <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 16px", fontSize: 11 }}
+                      onClick={() => { setEditingNote(false); setNoteText(personalNotes[studyCard.id] || ""); }}>
+                      Cancel
+                    </button>
+                    {personalNotes[studyCard.id] && (
+                      <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 16px", fontSize: 11, borderColor: "rgba(220,53,69,0.2)", color: "rgba(220,53,69,0.6)" }}
+                        onClick={() => { saveNote(studyCard.id, ""); setEditingNote(false); setNoteText(""); }}>
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Prev / Next navigation */}
             {(() => {
@@ -1427,7 +1603,7 @@ export default function App() {
                   <button
                     className="nav-btn nav-btn-ghost"
                     style={{ flex: 1, opacity: prev ? 1 : 0.3, pointerEvents: prev ? "auto" : "none", fontSize: 11, padding: "10px 14px" }}
-                    onClick={() => { if (prev) { setStudyCard(prev); setShowDescription(false); } }}
+                    onClick={() => { if (prev) { setStudyCard(prev); setShowDescription(false); setEditingNote(false); setNoteText(personalNotes[prev.id] || ""); } }}
                   >
                     ← {prev ? prev.name : ""}
                     <span className="kbd-hint" style={{ opacity: 0.4, fontSize: 9, display: "block", marginTop: 2, textTransform: "none", letterSpacing: 0, fontFamily: "'Raleway', sans-serif" }}>[←]</span>
@@ -1435,7 +1611,7 @@ export default function App() {
                   <button
                     className="nav-btn nav-btn-ghost"
                     style={{ flex: 1, opacity: next ? 1 : 0.3, pointerEvents: next ? "auto" : "none", fontSize: 11, padding: "10px 14px" }}
-                    onClick={() => { if (next) { setStudyCard(next); setShowDescription(false); } }}
+                    onClick={() => { if (next) { setStudyCard(next); setShowDescription(false); setEditingNote(false); setNoteText(personalNotes[next.id] || ""); } }}
                   >
                     {next ? next.name : ""} →
                     <span className="kbd-hint" style={{ opacity: 0.4, fontSize: 9, display: "block", marginTop: 2, textTransform: "none", letterSpacing: 0, fontFamily: "'Raleway', sans-serif" }}>[→]</span>
