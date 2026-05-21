@@ -776,6 +776,38 @@ export default function App() {
     }, 0);
   }, [dailyFocus, getCardSRS, srsData]);
 
+  // ─── ACHIEVEMENTS ───
+  const achievements = useMemo(() => {
+    const isMastered = (id) => { const s = srsData[id]; return s && getMasteryLevel(s).level >= 3; };
+    const suitMastered = (suit) => ALL_MINOR.filter(c => c.suit === suit).every(c => isMastered(c.id));
+    const majorAllMastered = MAJOR_ARCANA.every(c => isMastered(c.id));
+    const masteredCount = ALL_CARDS.filter(c => isMastered(c.id)).length;
+    const seenCount = ALL_CARDS.filter(c => srsData[c.id]?.totalAttempts > 0).length;
+    const notesCount = Object.keys(personalNotes).length;
+
+    const defs = [
+      { id: "first-steps", icon: "🌱", name: "First Steps", desc: "Complete your first session", unlocked: totalSessions >= 1 },
+      { id: "streak-7", icon: "🔥", name: "Kindling", desc: "Reach a streak of 7", unlocked: bestStreak >= 7 },
+      { id: "streak-30", icon: "🔥", name: "Bonfire", desc: "Reach a streak of 30", unlocked: bestStreak >= 30 },
+      { id: "streak-100", icon: "☄️", name: "Wildfire", desc: "Reach a streak of 100", unlocked: bestStreak >= 100 },
+      { id: "sessions-10", icon: "✦", name: "Devoted", desc: "Complete 10 sessions", unlocked: totalSessions >= 10 },
+      { id: "sessions-50", icon: "✦", name: "Dedicated", desc: "Complete 50 sessions", unlocked: totalSessions >= 50 },
+      { id: "seen-all-major", icon: "👁", name: "Acquainted", desc: "Practice every Major Arcana card", unlocked: MAJOR_ARCANA.every(c => srsData[c.id]?.totalAttempts > 0) },
+      { id: "major-master", icon: "☉", name: "Arcana Adept", desc: "Master all 22 Major Arcana", unlocked: majorAllMastered },
+      { id: "wands-master", icon: "🔥", name: "Wand Bearer", desc: "Master all of Wands", unlocked: unlockedMinor && suitMastered("Wands") },
+      { id: "cups-master", icon: "💧", name: "Cup Keeper", desc: "Master all of Cups", unlocked: unlockedMinor && suitMastered("Cups") },
+      { id: "swords-master", icon: "🌬", name: "Blade Dancer", desc: "Master all of Swords", unlocked: unlockedMinor && suitMastered("Swords") },
+      { id: "pentacles-master", icon: "🪙", name: "Coin Counter", desc: "Master all of Pentacles", unlocked: unlockedMinor && suitMastered("Pentacles") },
+      { id: "halfway", icon: "🌗", name: "Halfway There", desc: "Master half the deck", unlocked: masteredCount >= 39 },
+      { id: "full-deck", icon: "🌕", name: "The Whole Hoard", desc: "Master all 78 cards", unlocked: masteredCount >= 78 },
+      { id: "notes-5", icon: "📝", name: "Annotator", desc: "Write notes on 5 cards", unlocked: notesCount >= 5 },
+      { id: "scholar", icon: "📚", name: "Scholar", desc: "Write notes on 20 cards", unlocked: notesCount >= 20 },
+    ];
+    return defs;
+  }, [srsData, totalSessions, bestStreak, unlockedMinor, personalNotes]);
+
+  const unlockedAchievements = achievements.filter(a => a.unlocked).length;
+
   const cardFaceStyle = (card) => {
     if (card.suit === "Wands") return "#e85d26";
     if (card.suit === "Cups") return "#4a90d9";
@@ -959,6 +991,8 @@ export default function App() {
         .option-btn.wrong { background: rgba(220,53,69,0.15); border-color: rgba(220,53,69,0.5); animation: wrongShake 0.4s ease; }
         .kbd-hint { display: none; }
         @media (hover: hover) and (pointer: fine) { .kbd-hint { display: inline; } }
+        @keyframes masteredGlow { 0%, 100% { box-shadow: 0 0 4px rgba(201,168,76,0.2); } 50% { box-shadow: 0 0 10px rgba(201,168,76,0.4); } }
+        .mastered-tile { animation: masteredGlow 3s ease-in-out infinite; }
         .nav-btn { padding: 12px 28px; border-radius: 10px; font-family: 'Cinzel', serif; font-size: 13px; font-weight: 500; letter-spacing: 1px; cursor: pointer; transition: all 0.3s ease; text-transform: uppercase; }
         .nav-btn-primary { background: linear-gradient(135deg, rgba(201,168,76,0.25), rgba(201,168,76,0.1)); border: 1px solid rgba(201,168,76,0.4); color: #c9a84c; }
         .nav-btn-primary:hover { background: linear-gradient(135deg, rgba(201,168,76,0.35), rgba(201,168,76,0.15)); box-shadow: 0 4px 20px rgba(201,168,76,0.2); transform: translateY(-2px); }
@@ -1211,7 +1245,7 @@ export default function App() {
                       fontFamily: "'Cinzel', serif", fontSize: 11, opacity: 0.4,
                       borderRadius: 4, border: "1px solid rgba(201,168,76,0.1)",
                       background: "rgba(201,168,76,0.03)", flexShrink: 0,
-                    }}>{i + 1}</span>
+                    }}>{String.fromCharCode(65 + i)}</span>
                     {opt.text}
                   </button>
                 ))}
@@ -1629,12 +1663,36 @@ export default function App() {
               <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 14px", fontSize: 11 }} onClick={() => setScreen("home")}>← Back</button>
               <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 18, fontWeight: 500, letterSpacing: 2, color: "#c9a84c" }}>Progress</h2>
             </div>
+
+            {/* Deck Mastery Hero */}
+            {(() => {
+              const masteredTotal = availableCards.filter(c => srsData[c.id] && getMasteryLevel(srsData[c.id]).level >= 3).length;
+              const pct = Math.round((masteredTotal / availableCards.length) * 100);
+              return (
+                <div style={{
+                  padding: 24, marginBottom: 24, borderRadius: 18, textAlign: "center",
+                  background: "linear-gradient(160deg, rgba(201,168,76,0.1), rgba(201,168,76,0.02))",
+                  border: "1px solid rgba(201,168,76,0.2)",
+                }}>
+                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.4)", letterSpacing: 2, marginBottom: 8 }}>DECK MASTERY</div>
+                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 44, fontWeight: 600, color: "#c9a84c", lineHeight: 1, marginBottom: 4 }}>{pct}%</div>
+                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.5)", fontWeight: 300, marginBottom: 14 }}>
+                    {masteredTotal} of {availableCards.length} cards mastered
+                  </div>
+                  {/* Progress bar */}
+                  <div style={{ height: 6, borderRadius: 3, background: "rgba(201,168,76,0.08)", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg, rgba(201,168,76,0.5), rgba(201,168,76,0.8))", borderRadius: 3, transition: "width 0.6s ease" }} />
+                  </div>
+                </div>
+              );
+            })()}
+
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
               {[
                 { label: "Cards Seen", value: stats.attempted, total: stats.total },
-                { label: "Mastered", value: stats.mastered, color: "#4caf50" },
                 { label: "Struggling", value: stats.struggling, color: "#dc3545" },
                 { label: "Best Streak", value: bestStreak, color: "#c9a84c" },
+                { label: "Sessions", value: totalSessions, color: "#c9a84c" },
               ].map(s => (
                 <div key={s.label} style={{ padding: 16, background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.1)", borderRadius: 12, textAlign: "center" }}>
                   <div style={{ fontFamily: "'Cinzel', serif", fontSize: 22, color: s.color || "#c9a84c", fontWeight: 600 }}>{s.value}{s.total ? `/${s.total}` : ""}</div>
@@ -1642,15 +1700,45 @@ export default function App() {
                 </div>
               ))}
             </div>
+
+            {/* Achievements */}
+            <div style={{ marginBottom: 24 }}>
+              <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: 12, letterSpacing: 2, color: "rgba(201,168,76,0.5)", marginBottom: 12 }}>
+                ACHIEVEMENTS <span style={{ color: "rgba(201,168,76,0.3)" }}>· {unlockedAchievements}/{achievements.length}</span>
+              </h3>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {achievements.map(a => (
+                  <div key={a.id} style={{
+                    padding: 12, borderRadius: 12, display: "flex", alignItems: "center", gap: 10,
+                    background: a.unlocked ? "rgba(201,168,76,0.07)" : "rgba(255,255,255,0.02)",
+                    border: `1px solid ${a.unlocked ? "rgba(201,168,76,0.2)" : "rgba(255,255,255,0.04)"}`,
+                    opacity: a.unlocked ? 1 : 0.5,
+                  }}>
+                    <div style={{
+                      fontSize: 20, flexShrink: 0,
+                      filter: a.unlocked ? "drop-shadow(0 0 6px rgba(201,168,76,0.3))" : "grayscale(1)",
+                    }}>{a.unlocked ? a.icon : "🔒"}</div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, fontWeight: 500, color: a.unlocked ? "#e8dcc8" : "rgba(201,168,76,0.4)" }}>{a.name}</div>
+                      <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.4)", fontWeight: 300, lineHeight: 1.3 }}>{a.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Mastery Grids */}
             <div style={{ marginBottom: 16 }}>
-              <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: 12, letterSpacing: 2, color: "rgba(201,168,76,0.5)", marginBottom: 12 }}>MAJOR ARCANA MASTERY</h3>
+              <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: 12, letterSpacing: 2, color: "rgba(201,168,76,0.5)", marginBottom: 12 }}>MAJOR ARCANA</h3>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(36px, 1fr))", gap: 6 }}>
                 {MAJOR_ARCANA.map(card => {
                   const srs = getCardSRS(card.id); const mastery = getMasteryLevel(srs);
                   const colors = ["rgba(255,255,255,0.05)", "rgba(220,53,69,0.3)", "rgba(201,168,76,0.2)", "rgba(76,175,80,0.3)", "rgba(201,168,76,0.5)"];
                   return (
-                    <div key={card.id} title={`${card.name} — ${mastery.label}`} style={{ width: "100%", aspectRatio: "1", borderRadius: 6, background: colors[mastery.level], display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontFamily: "'Cinzel', serif", color: mastery.level > 0 ? "#e8dcc8" : "rgba(255,255,255,0.2)", fontWeight: 600, cursor: "pointer" }}
-                      onClick={() => { setStudyCard(card); setShowDescription(false); setScreen("study"); }}>
+                    <div key={card.id} title={`${card.name} — ${mastery.label}`}
+                      className={mastery.level >= 4 ? "mastered-tile" : ""}
+                      style={{ width: "100%", aspectRatio: "1", borderRadius: 6, background: colors[mastery.level], display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontFamily: "'Cinzel', serif", color: mastery.level > 0 ? "#e8dcc8" : "rgba(255,255,255,0.2)", fontWeight: 600, cursor: "pointer" }}
+                      onClick={() => { setStudyCard(card); setShowDescription(false); setEditingNote(false); setNoteText(personalNotes[card.id] || ""); setScreen("study"); }}>
                       {card.numeral}
                     </div>
                   );
@@ -1667,7 +1755,10 @@ export default function App() {
                     const n = card.name.split(" ")[0];
                     const numMap = { "Ace": "A", "Two": "2", "Three": "3", "Four": "4", "Five": "5", "Six": "6", "Seven": "7", "Eight": "8", "Nine": "9", "Ten": "10", "Page": "P", "Knight": "Kn", "Queen": "Q", "King": "K" };
                     const label = numMap[n] || n.charAt(0);
-                    return <div key={card.id} title={`${card.name} — ${mastery.label}`} style={{ width: "100%", aspectRatio: "1", borderRadius: 4, background: colors[mastery.level], cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontFamily: "'Cinzel', serif", fontWeight: 600, color: mastery.level > 0 ? "#e8dcc8" : "rgba(255,255,255,0.2)" }} onClick={() => { setStudyCard(card); setShowDescription(false); setScreen("study"); }}>{label}</div>;
+                    return <div key={card.id} title={`${card.name} — ${mastery.label}`}
+                      className={mastery.level >= 4 ? "mastered-tile" : ""}
+                      style={{ width: "100%", aspectRatio: "1", borderRadius: 4, background: colors[mastery.level], cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontFamily: "'Cinzel', serif", fontWeight: 600, color: mastery.level > 0 ? "#e8dcc8" : "rgba(255,255,255,0.2)" }}
+                      onClick={() => { setStudyCard(card); setShowDescription(false); setEditingNote(false); setNoteText(personalNotes[card.id] || ""); setScreen("study"); }}>{label}</div>;
                   })}
                 </div>
               </div>
@@ -1677,7 +1768,7 @@ export default function App() {
                 <span style={{ color: "rgba(220,53,69,0.5)" }}>■</span> Struggling &nbsp;
                 <span style={{ color: "rgba(201,168,76,0.4)" }}>■</span> Learning &nbsp;
                 <span style={{ color: "rgba(76,175,80,0.5)" }}>■</span> Confident &nbsp;
-                <span style={{ color: "rgba(201,168,76,0.7)" }}>■</span> Mastered
+                <span style={{ color: "rgba(201,168,76,0.7)" }}>■</span> Mastered ✦
               </div>
             </div>
           </div>
