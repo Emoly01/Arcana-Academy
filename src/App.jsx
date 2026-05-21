@@ -1745,7 +1745,7 @@ export default function App() {
                 })}
               </div>
             </div>
-            {unlockedMinor && Object.keys(MINOR_ARCANA_SUITS).map(suit => (
+            {Object.keys(MINOR_ARCANA_SUITS).map(suit => (
               <div key={suit} style={{ marginBottom: 16 }}>
                 <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: 12, letterSpacing: 2, color: MINOR_ARCANA_SUITS[suit].color, marginBottom: 10, opacity: 0.7 }}>{suit.toUpperCase()}</h3>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(32px, 1fr))", gap: 4 }}>
