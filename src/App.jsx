@@ -1666,23 +1666,31 @@ export default function App() {
 
             {/* Deck Mastery Hero */}
             {(() => {
-              const masteredTotal = availableCards.filter(c => srsData[c.id] && getMasteryLevel(srsData[c.id]).level >= 3).length;
-              const pct = Math.round((masteredTotal / availableCards.length) * 100);
+              const majorMastered = MAJOR_ARCANA.filter(c => srsData[c.id] && getMasteryLevel(srsData[c.id]).level >= 3).length;
+              const majorPct = Math.round((majorMastered / MAJOR_ARCANA.length) * 100);
+              const minorMastered = ALL_MINOR.filter(c => srsData[c.id] && getMasteryLevel(srsData[c.id]).level >= 3).length;
+              const minorPct = Math.round((minorMastered / ALL_MINOR.length) * 100);
               return (
-                <div style={{
-                  padding: 24, marginBottom: 24, borderRadius: 18, textAlign: "center",
-                  background: "linear-gradient(160deg, rgba(201,168,76,0.1), rgba(201,168,76,0.02))",
-                  border: "1px solid rgba(201,168,76,0.2)",
-                }}>
-                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.4)", letterSpacing: 2, marginBottom: 8 }}>DECK MASTERY</div>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 44, fontWeight: 600, color: "#c9a84c", lineHeight: 1, marginBottom: 4 }}>{pct}%</div>
-                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.5)", fontWeight: 300, marginBottom: 14 }}>
-                    {masteredTotal} of {availableCards.length} cards mastered
-                  </div>
-                  {/* Progress bar */}
-                  <div style={{ height: 6, borderRadius: 3, background: "rgba(201,168,76,0.08)", overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg, rgba(201,168,76,0.5), rgba(201,168,76,0.8))", borderRadius: 3, transition: "width 0.6s ease" }} />
-                  </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
+                  {[
+                    { label: "Major Arcana", mastered: majorMastered, total: MAJOR_ARCANA.length, pct: majorPct },
+                    { label: "Minor Arcana", mastered: minorMastered, total: ALL_MINOR.length, pct: minorPct },
+                  ].map(s => (
+                    <div key={s.label} style={{
+                      padding: 20, borderRadius: 16, textAlign: "center",
+                      background: "linear-gradient(160deg, rgba(201,168,76,0.08), rgba(201,168,76,0.02))",
+                      border: "1px solid rgba(201,168,76,0.18)",
+                    }}>
+                      <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.4)", letterSpacing: 2, marginBottom: 8 }}>{s.label.toUpperCase()}</div>
+                      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 36, fontWeight: 600, color: "#c9a84c", lineHeight: 1, marginBottom: 4 }}>{s.pct}%</div>
+                      <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.5)", fontWeight: 300, marginBottom: 12 }}>
+                        {s.mastered} / {s.total}
+                      </div>
+                      <div style={{ height: 5, borderRadius: 3, background: "rgba(201,168,76,0.08)", overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${s.pct}%`, background: "linear-gradient(90deg, rgba(201,168,76,0.5), rgba(201,168,76,0.8))", borderRadius: 3, transition: "width 0.6s ease" }} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               );
             })()}
