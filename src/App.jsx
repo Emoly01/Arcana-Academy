@@ -503,6 +503,9 @@ export default function App() {
   const [personalNotes, setPersonalNotes] = useState({});
   const [editingNote, setEditingNote] = useState(false);
   const [noteText, setNoteText] = useState("");
+  // Quick reference
+  const [refSearch, setRefSearch] = useState("");
+  const [refExpanded, setRefExpanded] = useState(null);
   const [synced, setSynced] = useState(false);
   // Free-type state
   const [typedInput, setTypedInput] = useState("");
@@ -1147,6 +1150,9 @@ export default function App() {
               <button className="nav-btn nav-btn-ghost" style={{ flex: 1 }} onClick={() => setScreen("study")}>📖 Study</button>
               <button className="nav-btn nav-btn-ghost" style={{ flex: 1 }} onClick={() => setScreen("progress")}>📊 Progress</button>
             </div>
+            <div style={{ marginTop: 10 }}>
+              <button className="nav-btn nav-btn-ghost" style={{ width: "100%" }} onClick={() => { setScreen("reference"); setRefSearch(""); }}>🔍 Quick Reference</button>
+            </div>
           </div>
         )}
 
@@ -1745,7 +1751,7 @@ export default function App() {
                 })}
               </div>
             </div>
-            {Object.keys(MINOR_ARCANA_SUITS).map(suit => (
+            {unlockedMinor && Object.keys(MINOR_ARCANA_SUITS).map(suit => (
               <div key={suit} style={{ marginBottom: 16 }}>
                 <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: 12, letterSpacing: 2, color: MINOR_ARCANA_SUITS[suit].color, marginBottom: 10, opacity: 0.7 }}>{suit.toUpperCase()}</h3>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(32px, 1fr))", gap: 4 }}>
@@ -1771,6 +1777,142 @@ export default function App() {
                 <span style={{ color: "rgba(201,168,76,0.7)" }}>■</span> Mastered ✦
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ═══ QUICK REFERENCE ═══ */}
+        {screen === "reference" && (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 16, gap: 12 }}>
+              <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 14px", fontSize: 11 }} onClick={() => setScreen("home")}>← Back</button>
+              <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 18, fontWeight: 500, letterSpacing: 2, color: "#c9a84c" }}>Quick Reference</h2>
+            </div>
+
+            {/* Search box */}
+            <input
+              type="text"
+              placeholder="Search by card name or meaning..."
+              value={refSearch}
+              onChange={(e) => setRefSearch(e.target.value)}
+              autoFocus
+              style={{
+                width: "100%", padding: "14px 16px", marginBottom: 16,
+                background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.2)",
+                borderRadius: 12, color: "#e8dcc8", fontFamily: "'Raleway', sans-serif",
+                fontSize: 15, outline: "none",
+              }}
+            />
+
+            {/* Results */}
+            {(() => {
+              const q = refSearch.toLowerCase().trim();
+              const pool = unlockedMinor ? ALL_CARDS : MAJOR_ARCANA;
+              let results;
+              if (!q) {
+                results = pool;
+              } else {
+                results = pool.filter(c => {
+                  if (c.name.toLowerCase().includes(q)) return true;
+                  if (c.upright.some(m => m.toLowerCase().includes(q))) return true;
+                  if (c.reversed.some(m => m.toLowerCase().includes(q))) return true;
+                  if (c.keywords && c.keywords.toLowerCase().includes(q)) return true;
+                  if (c.element && c.element.toLowerCase().includes(q)) return true;
+                  return false;
+                });
+              }
+
+              if (results.length === 0) {
+                return (
+                  <div style={{ textAlign: "center", padding: 40 }}>
+                    <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.5 }}>🔮</div>
+                    <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.4)", fontWeight: 300 }}>
+                      No cards match "{refSearch}"
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div>
+                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.3)", marginBottom: 10, letterSpacing: 1 }}>
+                    {results.length} CARD{results.length !== 1 ? "S" : ""}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {results.map(card => {
+                      const expanded = refExpanded === card.id;
+                      const accent = cardFaceStyle(card);
+                      return (
+                        <div key={card.id} style={{
+                          borderRadius: 12, overflow: "hidden",
+                          background: "rgba(201,168,76,0.04)", border: `1px solid ${expanded ? "rgba(201,168,76,0.3)" : "rgba(201,168,76,0.1)"}`,
+                          transition: "border-color 0.2s ease",
+                        }}>
+                          {/* Card header — always visible */}
+                          <div onClick={() => setRefExpanded(expanded ? null : card.id)}
+                            style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
+                            <div style={{
+                              width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                              background: `${accent}18`, display: "flex", alignItems: "center", justifyContent: "center",
+                              fontSize: card.id < 22 ? 16 : 11, color: accent, fontFamily: "'Cinzel', serif", fontWeight: 600,
+                            }}>
+                              {card.id < 22 ? (CARD_SYMBOLS[card.id] || "✦") : (() => {
+                                const n = card.name.split(" ")[0];
+                                const numMap = { "Ace": "A", "Two": "2", "Three": "3", "Four": "4", "Five": "5", "Six": "6", "Seven": "7", "Eight": "8", "Nine": "9", "Ten": "10", "Page": "P", "Knight": "Kn", "Queen": "Q", "King": "K" };
+                                return numMap[n] || n.charAt(0);
+                              })()}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontFamily: "'Cinzel', serif", fontSize: 14, fontWeight: 500, color: "#e8dcc8" }}>{card.name}</div>
+                              {!expanded && (
+                                <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", fontWeight: 300, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                  {card.upright.slice(0, 3).join(", ")}
+                                </div>
+                              )}
+                            </div>
+                            <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.3)" }}>{expanded ? "▲" : "▼"}</div>
+                          </div>
+
+                          {/* Expanded detail */}
+                          {expanded && (
+                            <div style={{ padding: "0 14px 14px 14px", animation: "fadeUp 0.2s ease-out" }}>
+                              {card.description && (
+                                <div style={{ fontFamily: "'Crimson Text', serif", fontSize: 13, color: "rgba(232,220,200,0.6)", lineHeight: 1.6, fontStyle: "italic", marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid rgba(201,168,76,0.08)" }}>
+                                  {card.description}
+                                </div>
+                              )}
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: personalNotes[card.id] ? 12 : 0 }}>
+                                <div>
+                                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "rgba(76,175,80,0.6)", letterSpacing: 1, marginBottom: 6 }}>↑ UPRIGHT</div>
+                                  {card.upright.map((m, i) => (
+                                    <div key={i} style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(232,220,200,0.7)", marginBottom: 3, fontWeight: 300 }}>{m}</div>
+                                  ))}
+                                </div>
+                                <div>
+                                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "rgba(220,53,69,0.6)", letterSpacing: 1, marginBottom: 6 }}>↓ REVERSED</div>
+                                  {card.reversed.map((m, i) => (
+                                    <div key={i} style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(232,220,200,0.7)", marginBottom: 3, fontWeight: 300 }}>{m}</div>
+                                  ))}
+                                </div>
+                              </div>
+                              {personalNotes[card.id] && (
+                                <div style={{ padding: 10, borderRadius: 8, background: "rgba(139,92,246,0.04)", border: "1px solid rgba(139,92,246,0.12)", marginBottom: 12 }}>
+                                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 9, color: "rgba(139,92,246,0.5)", letterSpacing: 1, marginBottom: 4 }}>YOUR NOTE</div>
+                                  <div style={{ fontFamily: "'Crimson Text', serif", fontSize: 13, color: "rgba(232,220,200,0.7)", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{personalNotes[card.id]}</div>
+                                </div>
+                              )}
+                              <button className="nav-btn nav-btn-ghost" style={{ width: "100%", fontSize: 10, padding: "8px 12px" }}
+                                onClick={() => { setStudyCard(card); setShowDescription(false); setEditingNote(false); setNoteText(personalNotes[card.id] || ""); setScreen("study"); }}>
+                                Open full card →
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
