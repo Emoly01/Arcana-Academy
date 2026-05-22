@@ -154,6 +154,32 @@ function generateMinorArcana() {
 const ALL_MINOR = generateMinorArcana();
 const ALL_CARDS = [...MAJOR_ARCANA, ...ALL_MINOR];
 
+// ─── MOON PHASE & CARD OF THE DAY ───
+function getMoonPhase(date) {
+  // Known new moon: Jan 6, 2000
+  const known = new Date(2000, 0, 6, 18, 14).getTime();
+  const synodic = 29.53058867; // days
+  const days = (date.getTime() - known) / (1000 * 60 * 60 * 24);
+  const phase = ((days % synodic) + synodic) % synodic;
+  const fraction = phase / synodic;
+  if (fraction < 0.0625 || fraction >= 0.9375) return { name: "New Moon", icon: "🌑", glow: "rgba(80,80,120,0.15)" };
+  if (fraction < 0.1875) return { name: "Waxing Crescent", icon: "🌒", glow: "rgba(120,110,150,0.15)" };
+  if (fraction < 0.3125) return { name: "First Quarter", icon: "🌓", glow: "rgba(150,140,170,0.15)" };
+  if (fraction < 0.4375) return { name: "Waxing Gibbous", icon: "🌔", glow: "rgba(180,160,180,0.18)" };
+  if (fraction < 0.5625) return { name: "Full Moon", icon: "🌕", glow: "rgba(201,168,76,0.22)" };
+  if (fraction < 0.6875) return { name: "Waning Gibbous", icon: "🌖", glow: "rgba(180,160,180,0.18)" };
+  if (fraction < 0.8125) return { name: "Last Quarter", icon: "🌗", glow: "rgba(150,140,170,0.15)" };
+  return { name: "Waning Crescent", icon: "🌘", glow: "rgba(120,110,150,0.15)" };
+}
+
+function getCardOfTheDay(date, pool) {
+  // Deterministic per calendar day
+  const seed = date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
+  const idx = seed % pool.length;
+  const isUpright = (Math.floor(seed / pool.length)) % 2 === 0;
+  return { card: pool[idx], isUpright };
+}
+
 const CARD_SYMBOLS = {
   0: "☆", 1: "∞", 2: "☾", 3: "♀", 4: "♈", 5: "♉", 6: "♊", 7: "♋",
   8: "♌", 9: "♍", 10: "♃", 11: "♎", 12: "♆", 13: "♏", 14: "♐",
@@ -506,6 +532,8 @@ export default function App() {
   // Quick reference
   const [refSearch, setRefSearch] = useState("");
   const [refExpanded, setRefExpanded] = useState(null);
+  // Card of the day
+  const [cotdExpanded, setCotdExpanded] = useState(false);
   const [synced, setSynced] = useState(false);
   // Free-type state
   const [typedInput, setTypedInput] = useState("");
@@ -811,6 +839,13 @@ export default function App() {
 
   const unlockedAchievements = achievements.filter(a => a.unlocked).length;
 
+  // ─── MOON PHASE & CARD OF THE DAY ───
+  const moonPhase = useMemo(() => getMoonPhase(new Date()), []);
+  const cardOfTheDay = useMemo(() => {
+    const pool = unlockedMinor ? ALL_CARDS : MAJOR_ARCANA;
+    return getCardOfTheDay(new Date(), pool);
+  }, [unlockedMinor]);
+
   const cardFaceStyle = (card) => {
     if (card.suit === "Wands") return "#e85d26";
     if (card.suit === "Cups") return "#4a90d9";
@@ -1023,7 +1058,7 @@ export default function App() {
         {/* ═══ HOME ═══ */}
         {screen === "home" && (
           <div>
-            <div style={{ textAlign: "center", marginBottom: 36, paddingTop: 20 }}>
+            <div style={{ textAlign: "center", marginBottom: 28, paddingTop: 20 }}>
               <div style={{ fontSize: 42, marginBottom: 8, filter: "drop-shadow(0 0 12px rgba(201,168,76,0.3))" }}>✧</div>
               <h1 style={{
                 fontFamily: "'Cinzel', serif", fontSize: 28, fontWeight: 500, letterSpacing: 3,
@@ -1038,6 +1073,83 @@ export default function App() {
                 <span onClick={handleSignOut} style={{ cursor: "pointer", color: "rgba(201,168,76,0.3)", borderBottom: "1px solid rgba(201,168,76,0.15)" }}>sign out</span>
               </div>
             </div>
+
+            {/* Card of the Day */}
+            {(() => {
+              const cotd = cardOfTheDay.card;
+              const isUp = cardOfTheDay.isUpright;
+              const meanings = isUp ? cotd.upright : cotd.reversed;
+              return (
+                <div
+                  onClick={() => setCotdExpanded(!cotdExpanded)}
+                  style={{
+                    marginBottom: 24, borderRadius: 18, cursor: "pointer", overflow: "hidden",
+                    background: `linear-gradient(160deg, ${moonPhase.glow}, rgba(201,168,76,0.03))`,
+                    border: "1px solid rgba(201,168,76,0.2)",
+                    transition: "all 0.3s ease",
+                  }}>
+                  <div style={{ padding: "18px 20px" }}>
+                    {/* Moon phase line */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                      <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.4)", letterSpacing: 2 }}>CARD OF THE DAY</span>
+                      <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.5)", display: "flex", alignItems: "center", gap: 5 }}>
+                        {moonPhase.icon} {moonPhase.name}
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                      {/* Card symbol */}
+                      <div style={{
+                        width: 56, height: 80, borderRadius: 10, flexShrink: 0,
+                        background: "linear-gradient(160deg, rgba(201,168,76,0.12), rgba(201,168,76,0.04))",
+                        border: "1px solid rgba(201,168,76,0.2)",
+                        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                        transform: isUp ? "none" : "rotate(180deg)",
+                      }}>
+                        <div style={{ fontSize: 28, color: "#c9a84c", filter: "drop-shadow(0 0 8px rgba(201,168,76,0.3))" }}>
+                          {cotd.id < 22 ? (CARD_SYMBOLS[cotd.id] || "✦") : "✦"}
+                        </div>
+                      </div>
+                      {/* Card info */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 18, fontWeight: 600, color: "#e8dcc8", marginBottom: 2 }}>
+                          {cotd.name}
+                        </div>
+                        <div style={{
+                          fontFamily: "'Raleway', sans-serif", fontSize: 11, fontWeight: 400, marginBottom: 6,
+                          color: isUp ? "rgba(76,175,80,0.6)" : "rgba(220,53,69,0.6)",
+                        }}>
+                          {isUp ? "↑ Upright" : "↓ Reversed"}
+                        </div>
+                        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.5)", fontWeight: 300 }}>
+                          {meanings.slice(0, 3).join(" · ")}
+                        </div>
+                      </div>
+                      <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.3)" }}>{cotdExpanded ? "▲" : "▼"}</div>
+                    </div>
+
+                    {/* Expanded */}
+                    {cotdExpanded && (
+                      <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid rgba(201,168,76,0.1)", animation: "fadeUp 0.3s ease-out" }}>
+                        {cotd.description && (
+                          <div style={{ fontFamily: "'Crimson Text', serif", fontSize: 14, color: "rgba(232,220,200,0.7)", lineHeight: 1.7, fontStyle: "italic", marginBottom: 12 }}>
+                            {cotd.description}
+                          </div>
+                        )}
+                        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(232,220,200,0.6)", fontWeight: 300, lineHeight: 1.6 }}>
+                          <strong style={{ color: isUp ? "rgba(76,175,80,0.7)" : "rgba(220,53,69,0.7)" }}>
+                            {isUp ? "Upright" : "Reversed"}:
+                          </strong> {meanings.join(", ")}
+                        </div>
+                        <div style={{ fontFamily: "'Crimson Text', serif", fontSize: 13, color: "rgba(201,168,76,0.5)", fontStyle: "italic", marginTop: 12, textAlign: "center" }}>
+                          ✦ What might this card be asking of you today? ✦
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 28 }}>
               {[
