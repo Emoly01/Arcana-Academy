@@ -1363,7 +1363,7 @@ export default function App() {
                       fontFamily: "'Cinzel', serif", fontSize: 11, opacity: 0.4,
                       borderRadius: 4, border: "1px solid rgba(201,168,76,0.1)",
                       background: "rgba(201,168,76,0.03)", flexShrink: 0,
-                    }}>{String.fromCharCode(65 + i)}</span>
+                    }}>{i + 1}</span>
                     {opt.text}
                   </button>
                 ))}
