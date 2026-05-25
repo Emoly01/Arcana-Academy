@@ -1347,6 +1347,28 @@ export default function App() {
               )}
             </div>
 
+            {/* MC result feedback — above options */}
+            {currentQ.type !== "free-type" && currentQ.type !== "fill-gaps" && showResult && (
+              <div style={{ animation: "fadeUp 0.3s ease-out", marginBottom: 20 }}>
+                <div style={{
+                  padding: 20, borderRadius: 16, marginBottom: 16,
+                  background: selectedAnswer?.correct ? "rgba(76,175,80,0.18)" : "rgba(220,53,69,0.18)",
+                  border: `2px solid ${selectedAnswer?.correct ? "rgba(76,175,80,0.6)" : "rgba(220,53,69,0.6)"}`,
+                  boxShadow: selectedAnswer?.correct ? "0 0 24px rgba(76,175,80,0.15)" : "0 0 24px rgba(220,53,69,0.15)",
+                }}>
+                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 20, color: selectedAnswer?.correct ? "#4caf50" : "#dc3545", marginBottom: 8, fontWeight: 700, letterSpacing: 1 }}>
+                    {selectedAnswer?.correct ? "✦ Correct!" : "✕ Not quite"}
+                  </div>
+                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(232,220,200,0.6)", lineHeight: 1.6, fontWeight: 300 }}>
+                    <strong style={{ color: "#c9a84c" }}>{currentQ.card.name}</strong><br />
+                    Upright: {currentQ.card.upright.join(", ")}<br />
+                    Reversed: {currentQ.card.reversed.join(", ")}
+                  </div>
+                </div>
+                <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={nextQuestion}>Next Card → <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span></button>
+              </div>
+            )}
+
             {/* Multiple choice options */}
             {currentQ.type !== "free-type" && currentQ.type !== "fill-gaps" && currentQ.options && (
               <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
@@ -1501,27 +1523,6 @@ export default function App() {
               </div>
             )}
 
-            {/* MC result feedback */}
-            {currentQ.type !== "free-type" && currentQ.type !== "fill-gaps" && showResult && (
-              <div style={{ animation: "fadeUp 0.3s ease-out" }}>
-                <div style={{
-                  padding: 20, borderRadius: 16, marginBottom: 16,
-                  background: selectedAnswer?.correct ? "rgba(76,175,80,0.18)" : "rgba(220,53,69,0.18)",
-                  border: `2px solid ${selectedAnswer?.correct ? "rgba(76,175,80,0.6)" : "rgba(220,53,69,0.6)"}`,
-                  boxShadow: selectedAnswer?.correct ? "0 0 24px rgba(76,175,80,0.15)" : "0 0 24px rgba(220,53,69,0.15)",
-                }}>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 20, color: selectedAnswer?.correct ? "#4caf50" : "#dc3545", marginBottom: 8, fontWeight: 700, letterSpacing: 1 }}>
-                    {selectedAnswer?.correct ? "✦ Correct!" : "✕ Not quite"}
-                  </div>
-                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(232,220,200,0.6)", lineHeight: 1.6, fontWeight: 300 }}>
-                    <strong style={{ color: "#c9a84c" }}>{currentQ.card.name}</strong><br />
-                    Upright: {currentQ.card.upright.join(", ")}<br />
-                    Reversed: {currentQ.card.reversed.join(", ")}
-                  </div>
-                </div>
-                <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={nextQuestion}>Next Card → <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span></button>
-              </div>
-            )}
           </div>
         )}
 
