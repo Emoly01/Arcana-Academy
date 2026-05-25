@@ -1419,13 +1419,14 @@ export default function App() {
             {currentQ.type === "fill-gaps" && showResult && typeResult && (
               <div style={{ animation: "fadeUp 0.3s ease-out" }}>
                 <div style={{
-                  padding: 18, borderRadius: 14, marginBottom: 16,
-                  background: typeResult.score >= 0.4 ? "rgba(76,175,80,0.08)" : "rgba(220,53,69,0.08)",
-                  border: `1px solid ${typeResult.score >= 0.4 ? "rgba(76,175,80,0.2)" : "rgba(220,53,69,0.2)"}`,
+                  padding: 20, borderRadius: 16, marginBottom: 16,
+                  background: typeResult.score >= 0.4 ? "rgba(76,175,80,0.18)" : "rgba(220,53,69,0.18)",
+                  border: `2px solid ${typeResult.score >= 0.4 ? "rgba(76,175,80,0.6)" : "rgba(220,53,69,0.6)"}`,
+                  boxShadow: typeResult.score >= 0.4 ? "0 0 24px rgba(76,175,80,0.15)" : "0 0 24px rgba(220,53,69,0.15)",
                 }}>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 16, color: typeResult.score >= 0.4 ? "#4caf50" : "#dc3545", marginBottom: 10, fontWeight: 600 }}>
+                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 20, color: typeResult.score >= 0.4 ? "#4caf50" : "#dc3545", marginBottom: 10, fontWeight: 700, letterSpacing: 1 }}>
                     {typeResult.score >= 1 ? "✦ Perfect!" : typeResult.score >= 0.4 ? "✦ Getting there!" : "✕ Keep at it"}
-                    <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, fontWeight: 300, marginLeft: 8, opacity: 0.7 }}>
+                    <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, fontWeight: 300, marginLeft: 8, opacity: 0.7 }}>
                       {typeResult.matched.length}/{typeResult.total} gaps filled
                     </span>
                   </div>
@@ -1461,13 +1462,14 @@ export default function App() {
             {currentQ.type === "free-type" && showResult && typeResult && (
               <div style={{ animation: "fadeUp 0.3s ease-out" }}>
                 <div style={{
-                  padding: 18, borderRadius: 14, marginBottom: 16,
-                  background: typeResult.score >= 0.4 ? "rgba(76,175,80,0.08)" : "rgba(220,53,69,0.08)",
-                  border: `1px solid ${typeResult.score >= 0.4 ? "rgba(76,175,80,0.2)" : "rgba(220,53,69,0.2)"}`,
+                  padding: 20, borderRadius: 16, marginBottom: 16,
+                  background: typeResult.score >= 0.4 ? "rgba(76,175,80,0.18)" : "rgba(220,53,69,0.18)",
+                  border: `2px solid ${typeResult.score >= 0.4 ? "rgba(76,175,80,0.6)" : "rgba(220,53,69,0.6)"}`,
+                  boxShadow: typeResult.score >= 0.4 ? "0 0 24px rgba(76,175,80,0.15)" : "0 0 24px rgba(220,53,69,0.15)",
                 }}>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 16, color: typeResult.score >= 0.4 ? "#4caf50" : "#dc3545", marginBottom: 10, fontWeight: 600 }}>
+                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 20, color: typeResult.score >= 0.4 ? "#4caf50" : "#dc3545", marginBottom: 10, fontWeight: 700, letterSpacing: 1 }}>
                     {typeResult.score >= 0.8 ? "✦ Excellent!" : typeResult.score >= 0.4 ? "✦ Good effort!" : "✕ Keep practicing"}
-                    <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, fontWeight: 300, marginLeft: 8, opacity: 0.7 }}>
+                    <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, fontWeight: 300, marginLeft: 8, opacity: 0.7 }}>
                       {typeResult.matched.length}/{typeResult.total} matched
                     </span>
                   </div>
@@ -1503,10 +1505,12 @@ export default function App() {
             {currentQ.type !== "free-type" && currentQ.type !== "fill-gaps" && showResult && (
               <div style={{ animation: "fadeUp 0.3s ease-out" }}>
                 <div style={{
-                  padding: 16, background: selectedAnswer?.correct ? "rgba(76,175,80,0.08)" : "rgba(220,53,69,0.08)",
-                  border: `1px solid ${selectedAnswer?.correct ? "rgba(76,175,80,0.2)" : "rgba(220,53,69,0.2)"}`, borderRadius: 12, marginBottom: 16,
+                  padding: 20, borderRadius: 16, marginBottom: 16,
+                  background: selectedAnswer?.correct ? "rgba(76,175,80,0.18)" : "rgba(220,53,69,0.18)",
+                  border: `2px solid ${selectedAnswer?.correct ? "rgba(76,175,80,0.6)" : "rgba(220,53,69,0.6)"}`,
+                  boxShadow: selectedAnswer?.correct ? "0 0 24px rgba(76,175,80,0.15)" : "0 0 24px rgba(220,53,69,0.15)",
                 }}>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 14, color: selectedAnswer?.correct ? "#4caf50" : "#dc3545", marginBottom: 6, fontWeight: 600 }}>
+                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 20, color: selectedAnswer?.correct ? "#4caf50" : "#dc3545", marginBottom: 8, fontWeight: 700, letterSpacing: 1 }}>
                     {selectedAnswer?.correct ? "✦ Correct!" : "✕ Not quite"}
                   </div>
                   <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(232,220,200,0.6)", lineHeight: 1.6, fontWeight: 300 }}>
