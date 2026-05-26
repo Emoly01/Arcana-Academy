@@ -51,6 +51,23 @@ const MINOR_ARCANA_SUITS = {
   Pentacles: { element: "Earth", theme: "Material world, finances, health, work", color: "#d4a742" },
 };
 
+const RANK_THEMES = {
+  "Ace":    "Raw potential, the pure seed of the suit, new beginnings",
+  "Two":    "Balance, duality, partnership, an initial choice",
+  "Three":  "Growth, collaboration, early results, expansion",
+  "Four":   "Stability, structure, consolidation, a pause",
+  "Five":   "Conflict, loss, instability, challenge to the suit",
+  "Six":    "Harmony, recovery, balance restored, moving forward",
+  "Seven":  "Assessment, challenge, perseverance, a testing point",
+  "Eight":  "Mastery, momentum, movement, focused power",
+  "Nine":   "Near-completion, the fruits of effort, almost there",
+  "Ten":    "Completion, culmination, the full cycle of the suit",
+  "Page":   "The student or messenger — curiosity and new learning",
+  "Knight": "Action and pursuit — the suit's energy in motion",
+  "Queen":  "Inward mastery — nurturing, embodying the suit",
+  "King":   "Outward mastery — authority and command of the suit",
+};
+
 const COURT_NAMES = ["Page", "Knight", "Queen", "King"];
 const PIP_NAMES = ["Ace", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"];
 
@@ -321,6 +338,77 @@ function pickDistractors(correct, pool, count = 3) {
   return shuffle(pool.filter(c => c.id !== correct.id)).slice(0, count);
 }
 
+function generateSuitLogicQuestion() {
+  const suits = Object.keys(MINOR_ARCANA_SUITS);
+  const ranks = Object.keys(RANK_THEMES);
+  const abbrev = (t) => t.split(",")[0];
+  const subType = ["suit-meaning", "rank-meaning", "derivation"][Math.floor(Math.random() * 3)];
+
+  if (subType === "suit-meaning") {
+    const suit = suits[Math.floor(Math.random() * suits.length)];
+    const correctTheme = MINOR_ARCANA_SUITS[suit].theme;
+    const distractors = shuffle(suits.filter(s => s !== suit)).slice(0, 3)
+      .map(s => ({ id: s, text: MINOR_ARCANA_SUITS[s].theme, correct: false }));
+    const options = shuffle([{ id: suit, text: correctTheme, correct: true }, ...distractors]);
+    const repCard = ALL_MINOR.find(c => c.suit === suit && c.name.startsWith("Ace"));
+    return {
+      type: "suit-meaning",
+      prompt: `What does the suit of ${suit} represent?`,
+      subtitle: `${MINOR_ARCANA_SUITS[suit].element} · Suit theme`,
+      card: repCard,
+      options,
+      correctExplanation: `${suit} (${MINOR_ARCANA_SUITS[suit].element}): ${correctTheme}`,
+      suitColor: MINOR_ARCANA_SUITS[suit].color,
+    };
+  }
+
+  if (subType === "rank-meaning") {
+    const rank = ranks[Math.floor(Math.random() * ranks.length)];
+    const correctTheme = RANK_THEMES[rank];
+    const distractors = shuffle(ranks.filter(r => r !== rank)).slice(0, 3)
+      .map(r => ({ id: r, text: RANK_THEMES[r], correct: false }));
+    const options = shuffle([{ id: rank, text: correctTheme, correct: true }, ...distractors]);
+    const repCard = ALL_MINOR.find(c => c.name.startsWith(rank));
+    return {
+      type: "rank-meaning",
+      prompt: `Across all suits, what does the ${rank} represent?`,
+      subtitle: "Numerological theme",
+      card: repCard,
+      options,
+      correctExplanation: `${rank}: ${correctTheme}`,
+    };
+  }
+
+  // derivation
+  const card = ALL_MINOR[Math.floor(Math.random() * ALL_MINOR.length)];
+  const rank = card.name.split(" ")[0];
+  const suit = card.suit;
+  const rankTheme = RANK_THEMES[rank];
+  const suitTheme = MINOR_ARCANA_SUITS[suit].theme;
+  const correctText = `${abbrev(rankTheme)} + ${abbrev(suitTheme)}`;
+  const otherRanks = shuffle(ranks.filter(r => r !== rank));
+  const otherSuits = shuffle(suits.filter(s => s !== suit));
+  const distractorCombos = [
+    { rank: otherRanks[0], suit },
+    { rank, suit: otherSuits[0] },
+    { rank: otherRanks[1], suit: otherSuits[1] || otherSuits[0] },
+  ].map((d, i) => ({
+    id: `d${i}`,
+    text: `${abbrev(RANK_THEMES[d.rank])} + ${abbrev(MINOR_ARCANA_SUITS[d.suit].theme)}`,
+    correct: false,
+  }));
+  const options = shuffle([{ id: card.id, text: correctText, correct: true }, ...distractorCombos]);
+  return {
+    type: "derivation",
+    prompt: card.name,
+    subtitle: "Which building blocks describe this card?",
+    card,
+    options,
+    correctExplanation: `${rank}: ${rankTheme}\n${suit} (${MINOR_ARCANA_SUITS[suit].element}): ${suitTheme}`,
+    suitColor: MINOR_ARCANA_SUITS[suit].color,
+  };
+}
+
 function generateQuestion(card, pool, mode, orientationFilter = "both") {
   const distractors = pickDistractors(card, pool);
 
@@ -331,9 +419,17 @@ function generateQuestion(card, pool, mode, orientationFilter = "both") {
     return Math.random() > 0.5;
   };
 
+  if (mode === "suit-logic") {
+    return generateSuitLogicQuestion();
+  }
+
   if (mode === "mixed") {
-    const modes = ["card-to-meaning", "meaning-to-card", "upright-reversed", "free-type", "fill-gaps"];
-    return generateQuestion(card, pool, modes[Math.floor(Math.random() * modes.length)], orientationFilter);
+    const hasMinor = pool.some(c => c.suit);
+    const modes = ["card-to-meaning", "meaning-to-card", "upright-reversed", "free-type", "fill-gaps",
+      ...(hasMinor ? ["suit-logic"] : [])];
+    const picked = modes[Math.floor(Math.random() * modes.length)];
+    if (picked === "suit-logic") return generateSuitLogicQuestion();
+    return generateQuestion(card, pool, picked, orientationFilter);
   }
 
   if (mode === "card-to-meaning") {
@@ -586,16 +682,20 @@ export default function App() {
 
   const startQuiz = useCallback((mode) => {
     setQuizMode(mode);
+    setSessionCorrect(0); setSessionTotal(0); setCurrentStreak(0);
+    setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null);
+    if (mode === "suit-logic") {
+      setCurrentQ(generateSuitLogicQuestion());
+      setScreen("quiz");
+      return;
+    }
     const pool = getQuizPool(quizDeck);
     const now = Date.now();
     const due = pool.filter(c => getCardSRS(c.id).nextReview <= now);
     const sorted = due.length > 0 ? shuffle(due) : shuffle(pool);
-    setSessionCorrect(0); setSessionTotal(0); setCurrentStreak(0);
-    // Attach meaningHits data to the card for fill-gaps mode
     const cardWithHits = { ...sorted[0], _meaningHits: srsData[sorted[0].id]?.meaningHits || {} };
     const q = generateQuestion(cardWithHits, pool, mode, quizOrientation);
     setCurrentQ(q);
-    setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null);
     setScreen("quiz");
   }, [getQuizPool, quizDeck, quizOrientation, getCardSRS, srsData]);
 
@@ -694,13 +794,17 @@ export default function App() {
   }, [showResult, typedInput, currentQ, bestStreak, currentStreak, unlockedMinor, totalSessions, saveRef, getCardSRS]);
 
   const nextQuestion = useCallback(() => {
+    setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null);
+    if (quizMode === "suit-logic") {
+      setCurrentQ(generateSuitLogicQuestion());
+      return;
+    }
     const pool = getQuizPool(quizDeck);
     const now = Date.now();
     const due = pool.filter(c => getCardSRS(c.id).nextReview <= now && c.id !== currentQ?.card?.id);
     const next = due.length > 0 ? due[Math.floor(Math.random() * due.length)] : pool[Math.floor(Math.random() * pool.length)];
     const nextWithHits = { ...next, _meaningHits: srsData[next.id]?.meaningHits || {} };
     setCurrentQ(generateQuestion(nextWithHits, pool, quizMode, quizOrientation));
-    setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null);
   }, [getQuizPool, quizDeck, quizOrientation, getCardSRS, currentQ, quizMode, srsData]);
 
   const endQuiz = useCallback(() => {
@@ -1243,6 +1347,7 @@ export default function App() {
                   { mode: "upright-reversed", icon: "⚖", title: "Upright vs Reversed", desc: "Know the difference" },
                   { mode: "free-type", icon: "✍", title: "Free Recall", desc: "Type meanings from memory — no hints" },
                   { mode: "fill-gaps", icon: "🧩", title: "Fill the Gaps", desc: "We show what you know — type what you don't" },
+                  ...(unlockedMinor ? [{ mode: "suit-logic", icon: "♟", title: "Suit & Number Logic", desc: "Learn the system — derive Minor Arcana meanings" }] : []),
                   { mode: "mixed", icon: "🌙", title: "Mixed Practice", desc: "All modes, spaced repetition" },
                 ].map(m => (
                   <div key={m.mode} className="mode-card" onClick={() => startQuiz(m.mode)}>
@@ -1302,12 +1407,25 @@ export default function App() {
                 {currentQ.type === "upright-reversed" && "Choose the correct meaning"}
                 {currentQ.type === "free-type" && "Free recall"}
                 {currentQ.type === "fill-gaps" && "Fill the gaps"}
+                {currentQ.type === "suit-meaning" && "Suit & Number Logic · Suit theme"}
+                {currentQ.type === "rank-meaning" && "Suit & Number Logic · Rank theme"}
+                {currentQ.type === "derivation" && "Suit & Number Logic · Build the meaning"}
               </div>
 
               {currentQ.card.id < 22 && currentQ.type !== "meaning-to-card" && (
                 <div style={{ fontSize: 40, marginBottom: 8, filter: "drop-shadow(0 0 8px rgba(201,168,76,0.3))", color: "#c9a84c" }}>
                   {CARD_SYMBOLS[currentQ.card.id] || "✦"}
                 </div>
+              )}
+
+              {currentQ.type === "suit-meaning" && (
+                <div style={{ fontSize: 36, marginBottom: 8, filter: `drop-shadow(0 0 10px ${currentQ.suitColor}55)`, color: currentQ.suitColor }}>◈</div>
+              )}
+              {currentQ.type === "rank-meaning" && (
+                <div style={{ fontSize: 36, marginBottom: 8, filter: "drop-shadow(0 0 8px rgba(201,168,76,0.3))", color: "#c9a84c" }}>⊕</div>
+              )}
+              {currentQ.type === "derivation" && (
+                <div style={{ fontSize: 32, marginBottom: 8, filter: `drop-shadow(0 0 10px ${currentQ.suitColor}55)`, color: currentQ.suitColor }}>♟</div>
               )}
               {currentQ.type !== "fill-gaps" && (
                 <div style={{ fontFamily: "'Cinzel', serif", fontSize: 22, fontWeight: 600, color: "#e8dcc8", marginBottom: 8, lineHeight: 1.5 }}>
@@ -1359,11 +1477,17 @@ export default function App() {
                   <div style={{ fontFamily: "'Cinzel', serif", fontSize: 20, color: selectedAnswer?.correct ? "#4caf50" : "#dc3545", marginBottom: 8, fontWeight: 700, letterSpacing: 1 }}>
                     {selectedAnswer?.correct ? "✦ Correct!" : "✕ Not quite"}
                   </div>
-                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(232,220,200,0.6)", lineHeight: 1.6, fontWeight: 300 }}>
-                    <strong style={{ color: "#c9a84c" }}>{currentQ.card.name}</strong><br />
-                    Upright: {currentQ.card.upright.join(", ")}<br />
-                    Reversed: {currentQ.card.reversed.join(", ")}
-                  </div>
+                  {(currentQ.type === "suit-meaning" || currentQ.type === "rank-meaning" || currentQ.type === "derivation") ? (
+                    <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(232,220,200,0.7)", lineHeight: 1.8, fontWeight: 300, whiteSpace: "pre-line" }}>
+                      {currentQ.correctExplanation}
+                    </div>
+                  ) : (
+                    <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(232,220,200,0.6)", lineHeight: 1.6, fontWeight: 300 }}>
+                      <strong style={{ color: "#c9a84c" }}>{currentQ.card.name}</strong><br />
+                      Upright: {currentQ.card.upright.join(", ")}<br />
+                      Reversed: {currentQ.card.reversed.join(", ")}
+                    </div>
+                  )}
                 </div>
                 <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={nextQuestion}>Next Card → <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span></button>
               </div>
