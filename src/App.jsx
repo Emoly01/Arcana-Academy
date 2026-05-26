@@ -1783,6 +1783,30 @@ export default function App() {
               </div>
             )}
 
+            {/* Building Blocks — Minor Arcana only */}
+            {studyCard.suit && (() => {
+              const rank = studyCard.name.split(" ")[0];
+              const rankTheme = RANK_THEMES[rank];
+              const suitData = MINOR_ARCANA_SUITS[studyCard.suit];
+              return (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "rgba(201,168,76,0.4)", letterSpacing: 1, marginBottom: 10 }}>BUILDING BLOCKS</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {rankTheme && (
+                      <div style={{ padding: "12px 16px", borderRadius: 12, background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.12)", display: "flex", gap: 12, alignItems: "flex-start" }}>
+                        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "rgba(201,168,76,0.5)", letterSpacing: 1, minWidth: 52, paddingTop: 1 }}>{rank.toUpperCase()}</div>
+                        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(232,220,200,0.7)", fontWeight: 300, lineHeight: 1.5 }}>{rankTheme}</div>
+                      </div>
+                    )}
+                    <div style={{ padding: "12px 16px", borderRadius: 12, background: `${suitData.color}0d`, border: `1px solid ${suitData.color}30`, display: "flex", gap: 12, alignItems: "flex-start" }}>
+                      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: suitData.color, letterSpacing: 1, minWidth: 52, paddingTop: 1, opacity: 0.8 }}>{studyCard.suit.toUpperCase()}</div>
+                      <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(232,220,200,0.7)", fontWeight: 300, lineHeight: 1.5 }}>{suitData.theme}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Card Connections */}
             {CARD_CONNECTIONS[studyCard.id] && CARD_CONNECTIONS[studyCard.id].length > 0 && (
               <div style={{ marginTop: 16 }}>
