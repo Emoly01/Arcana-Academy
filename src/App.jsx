@@ -840,8 +840,12 @@ export default function App() {
     if (studyFilter === "cups") return ALL_MINOR.filter(c => c.suit === "Cups");
     if (studyFilter === "swords") return ALL_MINOR.filter(c => c.suit === "Swords");
     if (studyFilter === "pentacles") return ALL_MINOR.filter(c => c.suit === "Pentacles");
+    if (studyFilter === "leeches") return availableCards.filter(c => {
+      const s = srsData[c.id];
+      return s && s.totalAttempts >= 6 && s.totalCorrect / s.totalAttempts < 0.5;
+    });
     return availableCards;
-  }, [studyFilter, availableCards]);
+  }, [studyFilter, availableCards, srsData]);
 
   const stats = useMemo(() => {
     const total = availableCards.length;
@@ -850,6 +854,13 @@ export default function App() {
     const struggling = availableCards.filter(c => srsData[c.id] && getMasteryLevel(srsData[c.id]).level === 1).length;
     return { total, attempted, mastered, struggling };
   }, [availableCards, srsData]);
+
+  const leeches = useMemo(() =>
+    availableCards.filter(c => {
+      const s = srsData[c.id];
+      return s && s.totalAttempts >= 6 && s.totalCorrect / s.totalAttempts < 0.5;
+    }),
+  [availableCards, srsData]);
 
   // ─── DAILY FOCUS ───
   const dailyFocus = useMemo(() => {
@@ -1286,6 +1297,20 @@ export default function App() {
                 </div>
               ))}
             </div>
+
+            {leeches.length > 0 && (
+              <div onClick={() => { setStudyFilter("leeches"); setScreen("study"); }} style={{
+                padding: "12px 16px", marginBottom: 16, cursor: "pointer", borderRadius: 12,
+                background: "rgba(201,168,76,0.05)", border: "1px solid rgba(201,168,76,0.14)",
+                display: "flex", alignItems: "center", gap: 10, transition: "all 0.2s ease",
+              }}>
+                <span style={{ fontSize: 15, opacity: 0.6, flexShrink: 0 }}>🜸</span>
+                <div style={{ flex: 1, fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.55)", fontWeight: 300, lineHeight: 1.5 }}>
+                  <span style={{ color: "rgba(201,168,76,0.8)", fontWeight: 400 }}>{leeches.length} card{leeches.length !== 1 ? "s" : ""}</span> keep slipping — try a different approach
+                </div>
+                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "rgba(201,168,76,0.3)", letterSpacing: 1, flexShrink: 0 }}>REVIEW →</div>
+              </div>
+            )}
 
             {canUnlockMinor && (
               <div onClick={handleUnlockMinor} style={{ padding: "16px 20px", background: "linear-gradient(135deg, rgba(201,168,76,0.12), rgba(201,168,76,0.04))", border: "1px solid rgba(201,168,76,0.35)", borderRadius: 14, marginBottom: 24, cursor: "pointer", textAlign: "center", animation: "pulse 2s ease-in-out infinite" }}>
@@ -1791,6 +1816,19 @@ export default function App() {
                 </div>
               )}
             </div>
+
+            {/* Leech nudge */}
+            {leeches.some(c => c.id === studyCard.id) && (
+              <div style={{
+                padding: "14px 16px", marginBottom: 20, borderRadius: 12,
+                background: "rgba(201,168,76,0.05)", border: "1px solid rgba(201,168,76,0.18)",
+              }}>
+                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "rgba(201,168,76,0.45)", letterSpacing: 1, marginBottom: 6 }}>🜸 THIS ONE NEEDS A NEW ANGLE</div>
+                <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.55)", fontWeight: 300, lineHeight: 1.65 }}>
+                  Try writing a personal note below — a mnemonic, a vivid image, or a memory that makes this card yours. Or explore its connected cards for a fresh context.
+                </div>
+              </div>
+            )}
 
             {/* Upright / Reversed */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
