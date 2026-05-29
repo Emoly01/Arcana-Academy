@@ -719,6 +719,20 @@ export default function App() {
     });
   }, [getCardSRS, bestStreak, currentStreak, unlockedMinor, totalSessions, saveRef]);
 
+  const nextQuestion = useCallback(() => {
+    setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null); setPendingConfidence(false);
+    if (quizMode === "suit-logic") {
+      setCurrentQ(generateSuitLogicQuestion());
+      return;
+    }
+    const pool = getQuizPool(quizDeck);
+    const now = Date.now();
+    const due = pool.filter(c => getCardSRS(c.id).nextReview <= now && c.id !== currentQ?.card?.id);
+    const next = due.length > 0 ? due[Math.floor(Math.random() * due.length)] : pool[Math.floor(Math.random() * pool.length)];
+    const nextWithHits = { ...next, _meaningHits: srsData[next.id]?.meaningHits || {} };
+    setCurrentQ(generateQuestion(nextWithHits, pool, quizMode, quizOrientation));
+  }, [getQuizPool, quizDeck, quizOrientation, getCardSRS, currentQ, quizMode, srsData]);
+
   const handleAnswer = useCallback((option) => {
     if (showResult) return;
     setSelectedAnswer(option);
@@ -807,20 +821,6 @@ export default function App() {
       setCurrentStreak(p => { const ns = p + 1; setBestStreak(b => Math.max(b, ns)); return ns; });
     } else { setCurrentStreak(0); }
   }, [showResult, typedInput, currentQ, bestStreak, currentStreak, unlockedMinor, totalSessions, saveRef, getCardSRS]);
-
-  const nextQuestion = useCallback(() => {
-    setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null); setPendingConfidence(false);
-    if (quizMode === "suit-logic") {
-      setCurrentQ(generateSuitLogicQuestion());
-      return;
-    }
-    const pool = getQuizPool(quizDeck);
-    const now = Date.now();
-    const due = pool.filter(c => getCardSRS(c.id).nextReview <= now && c.id !== currentQ?.card?.id);
-    const next = due.length > 0 ? due[Math.floor(Math.random() * due.length)] : pool[Math.floor(Math.random() * pool.length)];
-    const nextWithHits = { ...next, _meaningHits: srsData[next.id]?.meaningHits || {} };
-    setCurrentQ(generateQuestion(nextWithHits, pool, quizMode, quizOrientation));
-  }, [getQuizPool, quizDeck, quizOrientation, getCardSRS, currentQ, quizMode, srsData]);
 
   const endQuiz = useCallback(() => {
     const ns = totalSessions + 1;
