@@ -234,16 +234,21 @@ function getInitialSRS() {
   return { interval: 1, ease: 2.5, nextReview: 0, streak: 0, totalCorrect: 0, totalAttempts: 0 };
 }
 
-function updateSRS(card, correct) {
+function updateSRS(card, correct, confidence = "knew") {
   const now = Date.now();
   let { interval, ease, streak, totalCorrect, totalAttempts } = card;
   totalAttempts++;
   if (correct) {
     totalCorrect++; streak++;
-    if (streak === 1) interval = 1;
-    else if (streak === 2) interval = 3;
-    else interval = Math.round(interval * ease);
-    ease = Math.min(3.0, ease + 0.1);
+    if (confidence === "lucky") {
+      interval = 2;
+      ease = Math.max(1.3, ease - 0.1);
+    } else {
+      if (streak === 1) interval = 1;
+      else if (streak === 2) interval = 3;
+      else interval = Math.round(interval * ease);
+      ease = Math.min(3.0, ease + 0.1);
+    }
   } else {
     streak = 0; interval = 1;
     ease = Math.max(1.3, ease - 0.2);
@@ -638,6 +643,7 @@ export default function App() {
   // Deck filter for quizzes
   const [quizDeck, setQuizDeck] = useState("all");
   const [quizOrientation, setQuizOrientation] = useState("both");
+  const [pendingConfidence, setPendingConfidence] = useState(false);
   const resultShownAt = useRef(0);
 
   useEffect(() => {
@@ -683,7 +689,7 @@ export default function App() {
   const startQuiz = useCallback((mode) => {
     setQuizMode(mode);
     setSessionCorrect(0); setSessionTotal(0); setCurrentStreak(0);
-    setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null);
+    setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null); setPendingConfidence(false);
     if (mode === "suit-logic") {
       setCurrentQ(generateSuitLogicQuestion());
       setScreen("quiz");
@@ -699,14 +705,14 @@ export default function App() {
     setScreen("quiz");
   }, [getQuizPool, quizDeck, quizOrientation, getCardSRS, srsData]);
 
-  const recordAnswer = useCallback((correct, cardId) => {
+  const recordAnswer = useCallback((correct, cardId, confidence = "knew") => {
     setSessionTotal(p => p + 1);
     if (correct) {
       setSessionCorrect(p => p + 1);
       setCurrentStreak(p => { const ns = p + 1; setBestStreak(b => Math.max(b, ns)); return ns; });
     } else { setCurrentStreak(0); }
     setSrsData(prev => {
-      const updated = { ...prev, [cardId]: updateSRS(getCardSRS(cardId), correct) };
+      const updated = { ...prev, [cardId]: updateSRS(getCardSRS(cardId), correct, confidence) };
       const newBest = correct ? Math.max(bestStreak, currentStreak + 1) : bestStreak;
       saveRef(updated, unlockedMinor, newBest, totalSessions);
       return updated;
@@ -718,8 +724,17 @@ export default function App() {
     setSelectedAnswer(option);
     setShowResult(true);
     resultShownAt.current = Date.now();
-    recordAnswer(option.correct, currentQ.card.id);
+    if (option.correct) {
+      setPendingConfidence(true);
+    } else {
+      recordAnswer(false, currentQ.card.id, "wrong");
+    }
   }, [showResult, currentQ, recordAnswer]);
+
+  const handleConfidence = useCallback((confidence) => {
+    recordAnswer(true, currentQ.card.id, confidence);
+    nextQuestion();
+  }, [currentQ, recordAnswer, nextQuestion]);
 
   const handleTypeSubmit = useCallback(() => {
     if (showResult || !typedInput.trim()) return;
@@ -794,7 +809,7 @@ export default function App() {
   }, [showResult, typedInput, currentQ, bestStreak, currentStreak, unlockedMinor, totalSessions, saveRef, getCardSRS]);
 
   const nextQuestion = useCallback(() => {
-    setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null);
+    setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null); setPendingConfidence(false);
     if (quizMode === "suit-logic") {
       setCurrentQ(generateSuitLogicQuestion());
       return;
@@ -1017,12 +1032,15 @@ export default function App() {
         return;
       }
 
-      // After answering: Enter or Space → next question (with debounce to let you read results)
-      if (showResult && (e.key === "Enter" || e.key === " ")) {
-        if (Date.now() - resultShownAt.current < 500) return; // Don't skip too fast
-        e.preventDefault();
-        nextQuestion();
-        return;
+      // After answering
+      if (showResult) {
+        if (Date.now() - resultShownAt.current < 500) return;
+        if (pendingConfidence) {
+          if (e.key === "Enter" || e.key === "k") { e.preventDefault(); handleConfidence("knew"); return; }
+          if (e.key === "g") { e.preventDefault(); handleConfidence("lucky"); return; }
+        } else if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault(); nextQuestion(); return;
+        }
       }
 
       // Multiple choice: a/b/c/d or 1/2/3/4 to select answer
@@ -1052,7 +1070,7 @@ export default function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [screen, currentQ, showResult, nextQuestion, handleAnswer, handleTypeSubmit, endQuiz]);
+  }, [screen, currentQ, showResult, pendingConfidence, nextQuestion, handleAnswer, handleConfidence, handleTypeSubmit, endQuiz]);
 
   // ─── SIGN-IN SCREEN ───
   if (authLoading) {
@@ -1489,7 +1507,18 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={nextQuestion}>Next Card → <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span></button>
+                {pendingConfidence ? (
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button className="nav-btn nav-btn-primary" style={{ flex: 1 }} onClick={() => handleConfidence("knew")}>
+                      ✦ Knew it <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span>
+                    </button>
+                    <button className="nav-btn nav-btn-ghost" style={{ flex: 1 }} onClick={() => handleConfidence("lucky")}>
+                      Lucky guess <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[G]</span>
+                    </button>
+                  </div>
+                ) : (
+                  <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={nextQuestion}>Next Card → <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span></button>
+                )}
               </div>
             )}
 
