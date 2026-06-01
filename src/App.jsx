@@ -68,6 +68,185 @@ const RANK_THEMES = {
   "King":   "Outward mastery — authority and command of the suit",
 };
 
+const MAJOR_ARCANA_SYMBOLISM = {
+  "0": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Edge / cliff / threshold", meaning: "The leap into the unknown; the step taken before you can see the landing." },
+    { symbol: "Small bundle or sack", meaning: "Everything carried into a new beginning — light, untested, barely any baggage yet." },
+    { symbol: "White rose / pale flower", meaning: "Innocence and purity of intention; nothing yet corrupted by experience." },
+    { symbol: "Animal at the heels", meaning: "Instinct — either a loyal companion or the warning you're choosing to ignore." },
+    { symbol: "Sun behind the figure", meaning: "The universe's blessing on the departure; you set out watched over." },
+    { symbol: "Upward gaze / face to the sky", meaning: "Trust over caution; eyes on possibility, not the ground beneath." },
+  ]},
+  "1": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Raised hand / wand to the sky", meaning: "Drawing power down from above to direct it into the world; the channel between will and action." },
+    { symbol: "One hand up, one hand down", meaning: "'As above, so below' — manifestation, the link between the spiritual and the material." },
+    { symbol: "The four suit emblems on a table", meaning: "Mastery of all elements; every tool you need is already in front of you." },
+    { symbol: "Infinity symbol / lemniscate", meaning: "Limitless potential and the endless flow of energy through a focused mind." },
+    { symbol: "Serpent belt or coiled snake", meaning: "Knowledge devouring its own tail; renewal, transformation through understanding." },
+    { symbol: "Flowers and greenery at the feet", meaning: "Ideas bearing fruit; intention made fertile and real." },
+  ]},
+  "2": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Two pillars (light and dark)", meaning: "The threshold between conscious and unconscious; she sits at the gateway of hidden knowing." },
+    { symbol: "Veil or curtain behind her", meaning: "What's concealed; truth that won't be reached by force, only by patience." },
+    { symbol: "Crescent moon", meaning: "Intuition, cycles, the tides of the inner world rather than the outer." },
+    { symbol: "Scroll or book, partly hidden", meaning: "Secret wisdom — available, but not laid bare for the asking." },
+    { symbol: "Water behind the veil", meaning: "The deep unconscious; emotion and mystery flowing beneath the surface." },
+    { symbol: "Pomegranates / lunar fruit", meaning: "Fertility of the hidden mind; abundance held in the dark before it's seen." },
+  ]},
+  "3": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Lush vegetation / wheat / forest", meaning: "Abundance and fertility; creation that grows without forcing." },
+    { symbol: "Flowing river or stream", meaning: "Emotion and life feeding everything around her; nourishment in motion." },
+    { symbol: "Crown of stars", meaning: "Connection to the cosmos and the cycles of nature; sovereignty over the living world." },
+    { symbol: "Cushioned, reclining posture", meaning: "Comfort, sensuality, ease; the body honored, not denied." },
+    { symbol: "Venus symbol / heart motif", meaning: "Love, beauty, and creative attraction as a generative force." },
+    { symbol: "Pregnancy or rounded form", meaning: "Potential ripening into life; the fullness before birth." },
+  ]},
+  "4": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Stone throne", meaning: "Stability, permanence, authority built to last and not easily moved." },
+    { symbol: "Ram's heads or horns", meaning: "Mars energy — drive, assertion, the will to lead and conquer." },
+    { symbol: "Scepter or ankh", meaning: "Command and the power over life and structure; rulership made visible." },
+    { symbol: "Armor beneath the robes", meaning: "Readiness for conflict; protection underlying the calm exterior." },
+    { symbol: "Barren mountains behind", meaning: "Discipline over impulse; order imposed even where nothing grows easily." },
+    { symbol: "Long beard / aged figure", meaning: "Experience, established wisdom, the weight of earned authority." },
+  ]},
+  "5": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Two pillars or temple setting", meaning: "Tradition and institution; the established structure of belief." },
+    { symbol: "Triple crown / tiered headpiece", meaning: "Authority across body, mind, and spirit; layered sacred power." },
+    { symbol: "Raised hand of blessing", meaning: "Sanctioned teaching passed down; the transmission of doctrine." },
+    { symbol: "Crossed keys at the feet", meaning: "Access to hidden knowledge — but through the gatekeeper, not around them." },
+    { symbol: "Kneeling followers / acolytes", meaning: "Learning through hierarchy and belonging; wisdom held in community." },
+    { symbol: "Staff with three crossbars", meaning: "Spiritual authority over the seen and unseen realms." },
+  ]},
+  "6": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Two figures facing each other", meaning: "Union, partnership, the meeting of two halves; relationship and choice." },
+    { symbol: "Angel or higher figure above", meaning: "Blessing on the bond; a choice guided by something greater than desire." },
+    { symbol: "Sun radiant overhead", meaning: "Clarity, vitality, and truth illuminating the connection." },
+    { symbol: "Tree with fruit / serpent", meaning: "Temptation and knowledge; the choice between innocence and experience." },
+    { symbol: "Bare or unguarded figures", meaning: "Vulnerability and honesty; nothing hidden between true partners." },
+    { symbol: "A path forking behind them", meaning: "The decision at the heart of the card — values, not just romance." },
+  ]},
+  "7": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Two beasts (often sphinxes), one light one dark", meaning: "Opposing forces held in tension; willpower steering contradiction in one direction." },
+    { symbol: "No visible reins", meaning: "Control through focus and mind, not force; mastery that doesn't need to grip." },
+    { symbol: "Armored driver", meaning: "Determination and defense; victory won by staying protected and steady." },
+    { symbol: "Canopy of stars", meaning: "Alignment with a higher purpose; the journey blessed from above." },
+    { symbol: "City walls behind", meaning: "What's been left behind to advance; comfort traded for movement." },
+    { symbol: "Crescent moons on the shoulders", meaning: "Intuition and emotion harnessed, not abandoned, in pursuit of the goal." },
+  ]},
+  "8": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Figure with a lion", meaning: "The inner beast — passion, fear, instinct — met with gentleness, not violence." },
+    { symbol: "Hands calmly on the lion's jaws", meaning: "Power through patience and softness; mastery that soothes rather than subdues." },
+    { symbol: "Infinity symbol / lemniscate", meaning: "Endless inner strength; courage that renews itself." },
+    { symbol: "Crown or wreath of flowers", meaning: "Calm victory; strength that flowers rather than forces." },
+    { symbol: "White robe or flowing dress", meaning: "Purity of intention; force tempered by compassion." },
+    { symbol: "Serene expression", meaning: "True strength is unshaken; composure under pressure, not domination." },
+  ]},
+  "9": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Raised lantern", meaning: "Inner light carried into the dark; wisdom that guides the way for self and others." },
+    { symbol: "Lone figure on a peak", meaning: "Solitude chosen for clarity; withdrawal as a path to truth." },
+    { symbol: "Staff or walking stick", meaning: "Support earned through experience; steadiness on a difficult road." },
+    { symbol: "Star inside the lantern", meaning: "The guiding spark of truth; what's discovered in stillness." },
+    { symbol: "Grey or hooded robe", meaning: "Detachment from the world's noise; the quiet of introspection." },
+    { symbol: "Snow / mountain heights", meaning: "The cold, high reaches of self-knowledge, far above the crowd." },
+  ]},
+  "10": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "The wheel itself", meaning: "Cycles, fate, the turning of fortune; what rises will fall and rise again." },
+    { symbol: "Creatures at the corners", meaning: "The fixed points amid change; stability watching the spin." },
+    { symbol: "Rising and falling figures", meaning: "The impermanence of every high and low; nothing on the wheel stays put." },
+    { symbol: "Letters or symbols on the rim", meaning: "Hidden order within apparent chance; meaning encoded in the turning." },
+    { symbol: "A sphinx or figure atop the wheel", meaning: "Equilibrium at the center; the still point that doesn't spin." },
+    { symbol: "Serpent descending one side", meaning: "The downward turn; descent as part of the same cycle as ascent." },
+  ]},
+  "11": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Scales", meaning: "Balance, fairness, weighing of actions and consequences." },
+    { symbol: "Upright sword", meaning: "Truth that cuts clean; clear, impartial judgment without sentiment." },
+    { symbol: "Throne between pillars", meaning: "Authority of law; decisions made with structure and accountability." },
+    { symbol: "Crown or square headpiece", meaning: "Clear, ordered thought; reason ruling over emotion." },
+    { symbol: "One foot showing beneath the robe", meaning: "Readiness to act on judgment; fairness that doesn't stay theoretical." },
+    { symbol: "Direct, level gaze", meaning: "Impartiality; seeing things as they are, not as you'd wish them." },
+  ]},
+  "12": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Figure suspended upside down", meaning: "A reversed perspective; surrender that reveals what upright sight can't." },
+    { symbol: "Calm or serene face", meaning: "Willing sacrifice, not torment; peace inside the pause." },
+    { symbol: "Halo or glow around the head", meaning: "Enlightenment found in stillness; insight as the reward for letting go." },
+    { symbol: "Bound foot, free leg crossed", meaning: "Voluntary suspension; held in place yet at ease, even graceful." },
+    { symbol: "Tree or wooden frame", meaning: "Rooted waiting; the living structure that holds the pause." },
+    { symbol: "Hands hidden or behind the back", meaning: "Action withheld on purpose; power in doing nothing, for now." },
+  ]},
+  "13": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Skeleton figure", meaning: "What remains when everything inessential is stripped away; transformation, not literal end." },
+    { symbol: "Black flag with a white rose", meaning: "Death and purity together; the clean beauty on the far side of ending." },
+    { symbol: "Figures fallen and kneeling", meaning: "No one is exempt from change; status doesn't stop the cycle." },
+    { symbol: "Rising sun between pillars", meaning: "Rebirth follows the ending; a new dawn is built into the card." },
+    { symbol: "A river in the background", meaning: "The current of transition carrying everything onward." },
+    { symbol: "Scythe or harvest tool", meaning: "Cutting away the old so new growth has room; necessary clearing." },
+  ]},
+  "14": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Liquid poured between two cups", meaning: "Blending, balance, the flow of energy between opposites into harmony." },
+    { symbol: "One foot in water, one on land", meaning: "Bridging the conscious and unconscious; the material and the spiritual at once." },
+    { symbol: "Winged or angelic figure", meaning: "Higher guidance; moderation as a sacred, not merely practical, art." },
+    { symbol: "Triangle or square on the chest", meaning: "Spirit contained within matter; the divine grounded in form." },
+    { symbol: "A path leading to mountains/light", meaning: "The long road to a higher goal, walked with patience." },
+    { symbol: "Mixing of water and fire imagery", meaning: "Reconciling extremes; alchemy that makes something new from opposites." },
+  ]},
+  "15": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Horned, beastly figure", meaning: "The shadow self; primal urges and the parts we'd rather not own." },
+    { symbol: "Loose chains on captives", meaning: "Bondage that's chosen; the chains could lift off, but don't." },
+    { symbol: "Figures bound below", meaning: "Attachment, addiction, the things we let hold us down." },
+    { symbol: "Inverted torch or downward flame", meaning: "Energy turned destructive; passion misdirected into harm." },
+    { symbol: "Pentagram, often inverted", meaning: "Matter ruling over spirit; the material world mistaken for everything." },
+    { symbol: "A raised hand or commanding gesture", meaning: "The illusion of control; the master who is also enslaved." },
+  ]},
+  "16": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Lightning strike", meaning: "Sudden truth; the bolt of revelation that doesn't ask permission." },
+    { symbol: "Crown knocked loose / falling", meaning: "The collapse of false authority, of a structure built on the wrong foundation." },
+    { symbol: "Figures falling", meaning: "No graceful exit; the change is involuntary — you don't climb down, you're thrown." },
+    { symbol: "Fire / flames from windows", meaning: "Destruction that also purifies; burning out what couldn't stay." },
+    { symbol: "The tall, isolated tower", meaning: "The ego's construction; pride built too high on too little." },
+    { symbol: "Debris scattering midair", meaning: "What you thought was solid breaking apart all at once." },
+  ]},
+  "17": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Large central star", meaning: "Hope, guidance, the light that returns after darkness." },
+    { symbol: "Smaller surrounding stars", meaning: "The chakras or guiding influences; a wider order watching over you." },
+    { symbol: "Figure pouring water", meaning: "Replenishment; giving freely from a source that doesn't run dry." },
+    { symbol: "One foot in water, one on land", meaning: "Balance between the practical and the intuitive; healing on both planes." },
+    { symbol: "Nakedness / openness", meaning: "Vulnerability and truth; nothing to hide after the storm has passed." },
+    { symbol: "Calm pool or pond", meaning: "Emotional clarity restored; still water after turbulence." },
+  ]},
+  "18": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "The moon, often with a face", meaning: "Illusion, dreams, the half-light where things aren't what they seem." },
+    { symbol: "Two towers in the distance", meaning: "The gateway into the unknown; the threshold of fear and mystery." },
+    { symbol: "A dog and a wolf", meaning: "The tamed and the wild mind; instinct in both its forms." },
+    { symbol: "A creature emerging from water", meaning: "The unconscious surfacing; fears and intuitions rising from the deep." },
+    { symbol: "A winding path", meaning: "The uncertain road through confusion; no straight way through." },
+    { symbol: "Drops rising / falling around the moon", meaning: "Inspiration or anxiety drawn up from the subconscious." },
+  ]},
+  "19": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Radiant sun", meaning: "Joy, vitality, clarity; truth fully revealed in the light." },
+    { symbol: "A child, often on a horse", meaning: "Innocence, freedom, unguarded happiness; the pure self at play." },
+    { symbol: "Sunflowers", meaning: "Life turning toward the light; flourishing, warmth, and growth." },
+    { symbol: "A banner or flag held high", meaning: "Triumph and celebration; success worth declaring openly." },
+    { symbol: "A garden wall behind", meaning: "Safety and abundance; the nurtured space where good things grow." },
+    { symbol: "Rays with alternating shapes", meaning: "Active and receptive energy in balance; vitality that gives and sustains." },
+  ]},
+  "20": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Angel with a trumpet", meaning: "The call to awaken; a summons that can't be ignored." },
+    { symbol: "Figures rising / arms open", meaning: "Rebirth and answering the call; rising to meet a reckoning." },
+    { symbol: "Open graves or coffins", meaning: "What was dormant returning to life; the past resurfacing for resolution." },
+    { symbol: "A banner with a cross or symbol", meaning: "Redemption, a clean slate, the balance finally settled." },
+    { symbol: "Mountains in the distance", meaning: "The higher truth or destination now within reach." },
+    { symbol: "Water beneath the figures", meaning: "The depths of the past released; emotion finally moving." },
+  ]},
+  "21": { framing: "Symbols vary by deck — look for these themes:", symbols: [
+    { symbol: "Central dancing figure", meaning: "Wholeness and fulfillment; the self fully integrated and free." },
+    { symbol: "Wreath or laurel ring", meaning: "Completion, victory, the cycle closing in success." },
+    { symbol: "Four creatures at the corners", meaning: "The four elements and fixed signs; all forces in balance and harmony." },
+    { symbol: "Two wands or batons held", meaning: "Mastery of opposites; the same power that began the journey, now understood." },
+    { symbol: "A flowing scarf or veil", meaning: "Movement and continuity; ending that is also a turning into the next beginning." },
+    { symbol: "The figure inside the ring", meaning: "Arrival at the center; the whole world held, and belonging within it." },
+  ]},
+};
+
 const COURT_NAMES = ["Page", "Knight", "Queen", "King"];
 const PIP_NAMES = ["Ace", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"];
 
@@ -1816,6 +1995,26 @@ export default function App() {
                 </div>
               )}
             </div>
+
+            {/* Symbolism — Major Arcana only */}
+            {studyCard.id < 22 && (() => {
+              const symData = MAJOR_ARCANA_SYMBOLISM[String(studyCard.id)];
+              if (!symData) return null;
+              return (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "rgba(201,168,76,0.4)", letterSpacing: 1, marginBottom: 4 }}>SYMBOLISM</div>
+                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.3)", fontWeight: 300, marginBottom: 10, fontStyle: "italic" }}>{symData.framing}</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {symData.symbols.map((s, i) => (
+                      <div key={i} style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(201,168,76,0.03)", border: "1px solid rgba(201,168,76,0.09)", display: "flex", gap: 12, alignItems: "flex-start" }}>
+                        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "rgba(201,168,76,0.55)", letterSpacing: 0.5, minWidth: 0, flexShrink: 0, maxWidth: "38%", paddingTop: 1, lineHeight: 1.4 }}>{s.symbol}</div>
+                        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(232,220,200,0.6)", fontWeight: 300, lineHeight: 1.55 }}>{s.meaning}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Leech nudge */}
             {leeches.some(c => c.id === studyCard.id) && (
