@@ -1327,7 +1327,8 @@ export default function App() {
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&family=Cinzel:wght@400;500;600;700&family=Raleway:wght@300;400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&family=Cinzel:wght@400;500;600;700&family=Raleway:wght@300;400;500&family=Noto+Sans+Symbols+2&display=swap');
+        .arcana-glyph { font-family: 'Noto Sans Symbols 2', sans-serif; color: #c9a84c; }
         @keyframes float { 0%, 100% { transform: translateY(0) translateX(0); opacity: 0.3; } 33% { transform: translateY(-30px) translateX(10px); opacity: 0.6; } 66% { transform: translateY(-15px) translateX(-10px); opacity: 0.2; } }
         @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
@@ -1418,7 +1419,7 @@ export default function App() {
                         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
                         transform: isUp ? "none" : "rotate(180deg)",
                       }}>
-                        <div style={{ fontSize: 28, color: "#c9a84c", filter: "drop-shadow(0 0 8px rgba(201,168,76,0.3))" }}>
+                        <div className="arcana-glyph" style={{ fontSize: 28, filter: "drop-shadow(0 0 8px rgba(201,168,76,0.3))" }}>
                           {cotd.id < 22 ? (CARD_SYMBOLS[cotd.id] || "✦") : "✦"}
                         </div>
                       </div>
@@ -1635,7 +1636,7 @@ export default function App() {
               </div>
 
               {currentQ.card.id < 22 && currentQ.type !== "meaning-to-card" && (
-                <div style={{ fontSize: 40, marginBottom: 8, filter: "drop-shadow(0 0 8px rgba(201,168,76,0.3))", color: "#c9a84c" }}>
+                <div className="arcana-glyph" style={{ fontSize: 40, marginBottom: 8, filter: "drop-shadow(0 0 8px rgba(201,168,76,0.3))" }}>
                   {CARD_SYMBOLS[currentQ.card.id] || "✦"}
                 </div>
               )}
@@ -1960,7 +1961,7 @@ export default function App() {
                   return (
                     <div key={card.id} className="study-card" onClick={() => { setStudyCard(card); setShowDescription(false); setEditingNote(false); setNoteText(personalNotes[card.id] || ""); }}>
                       <div style={{ width: 36, height: 36, borderRadius: 8, flexShrink: 0, background: `${accent}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: card.id < 22 ? 18 : 12, color: accent, fontFamily: "'Cinzel', serif", fontWeight: 600 }}>
-                        {card.id < 22 ? (CARD_SYMBOLS[card.id] || "✦") : (() => {
+                        {card.id < 22 ? <span className="arcana-glyph" style={{ fontSize: 18 }}>{CARD_SYMBOLS[card.id] || "✦"}</span> : (() => {
                           const n = card.name.split(" ")[0];
                           const numMap = { "Ace": "A", "Two": "2", "Three": "3", "Four": "4", "Five": "5", "Six": "6", "Seven": "7", "Eight": "8", "Nine": "9", "Ten": "10", "Page": "P", "Knight": "Kn", "Queen": "Q", "King": "K" };
                           return numMap[n] || n.charAt(0);
@@ -1985,7 +1986,7 @@ export default function App() {
           <div>
             <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 14px", fontSize: 11, marginBottom: 20 }} onClick={() => { setStudyCard(null); setEditingNote(false); }}>← Back to list</button>
             <div style={{ padding: 28, background: "linear-gradient(160deg, rgba(201,168,76,0.06), rgba(201,168,76,0.02))", border: "1px solid rgba(201,168,76,0.15)", borderRadius: 20, textAlign: "center", marginBottom: 24 }}>
-              {studyCard.id < 22 && <div style={{ fontSize: 48, marginBottom: 12, color: "#c9a84c", filter: "drop-shadow(0 0 12px rgba(201,168,76,0.3))" }}>{CARD_SYMBOLS[studyCard.id] || "✦"}</div>}
+              {studyCard.id < 22 && <div className="arcana-glyph" style={{ fontSize: 48, marginBottom: 12, filter: "drop-shadow(0 0 12px rgba(201,168,76,0.3))" }}>{CARD_SYMBOLS[studyCard.id] || "✦"}</div>}
               <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: 22, fontWeight: 600, color: "#e8dcc8", marginBottom: 4 }}>{studyCard.name}</h3>
               <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.5)", marginBottom: 16, fontWeight: 300 }}>{studyCard.numeral && `${studyCard.numeral} · `}{studyCard.element}</div>
               {studyCard.description && (
@@ -2088,10 +2089,10 @@ export default function App() {
                           background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.1)",
                           transition: "all 0.2s ease", display: "flex", alignItems: "center", gap: 12,
                         }}>
-                        <div style={{
+                        <div className="arcana-glyph" style={{
                           width: 32, height: 32, borderRadius: 8,
                           background: "rgba(201,168,76,0.08)", display: "flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 16, color: "#c9a84c", flexShrink: 0,
+                          fontSize: 16, flexShrink: 0,
                         }}>{CARD_SYMBOLS[linkedCard.id] || "✦"}</div>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 500, color: "#e8dcc8" }}>{linkedCard.name}</div>
@@ -2386,7 +2387,7 @@ export default function App() {
                               background: `${accent}18`, display: "flex", alignItems: "center", justifyContent: "center",
                               fontSize: card.id < 22 ? 16 : 11, color: accent, fontFamily: "'Cinzel', serif", fontWeight: 600,
                             }}>
-                              {card.id < 22 ? (CARD_SYMBOLS[card.id] || "✦") : (() => {
+                              {card.id < 22 ? <span className="arcana-glyph" style={{ fontSize: 16 }}>{CARD_SYMBOLS[card.id] || "✦"}</span> : (() => {
                                 const n = card.name.split(" ")[0];
                                 const numMap = { "Ace": "A", "Two": "2", "Three": "3", "Four": "4", "Five": "5", "Six": "6", "Seven": "7", "Eight": "8", "Nine": "9", "Ten": "10", "Page": "P", "Knight": "Kn", "Queen": "Q", "King": "K" };
                                 return numMap[n] || n.charAt(0);
