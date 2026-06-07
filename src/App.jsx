@@ -518,8 +518,87 @@ function shuffle(arr) {
   return a;
 }
 
+const MAJOR_NEIGHBORS = {
+   0: [ 1, 12, 17, 20],  // Fool           → Magician, Hanged Man, Star, Judgement
+   1: [ 7, 21,  0],      // Magician       → Chariot, World, Fool
+   2: [18,  9, 12],      // High Priestess → Moon, Hermit, Hanged Man
+   3: [ 6, 21, 19],      // Empress        → Lovers, World, Sun
+   4: [ 7,  5, 11],      // Emperor        → Chariot, Hierophant, Justice
+   5: [ 4, 11,  9],      // Hierophant     → Emperor, Justice, Hermit
+   6: [14,  3,  7],      // Lovers         → Temperance, Empress, Chariot
+   7: [ 4,  1,  8],      // Chariot        → Emperor, Magician, Strength
+   8: [11, 14,  7],      // Strength       → Justice, Temperance, Chariot
+   9: [ 2, 12,  5],      // Hermit         → High Priestess, Hanged Man, Hierophant
+  10: [13, 16, 20],      // Wheel          → Death, Tower, Judgement
+  11: [ 8, 14,  4],      // Justice        → Strength, Temperance, Emperor
+  12: [ 9,  2,  0],      // Hanged Man     → Hermit, High Priestess, Fool
+  13: [15, 16, 10],      // Death          → Devil, Tower, Wheel
+  14: [ 6,  8, 11],      // Temperance     → Lovers, Strength, Justice
+  15: [13, 16, 10],      // Devil          → Death, Tower, Wheel
+  16: [15, 13, 10],      // Tower          → Devil, Death, Wheel
+  17: [18, 19, 20],      // Star           → Moon, Sun, Judgement
+  18: [17, 19,  2],      // Moon           → Star, Sun, High Priestess
+  19: [18, 17,  3],      // Sun            → Moon, Star, Empress
+  20: [21, 17, 13],      // Judgement      → World, Star, Death
+  21: [20,  3,  1],      // World          → Judgement, Empress, Magician
+};
+
+const MINOR_RANKS = ['Ace','Two','Three','Four','Five','Six','Seven',
+                     'Eight','Nine','Ten','Page','Knight','Queen','King'];
+
 function pickDistractors(correct, pool, count = 3) {
-  return shuffle(pool.filter(c => c.id !== correct.id)).slice(0, count);
+  const norm = s => s.toLowerCase().replace(/[^a-z]/g, '');
+  const correctKws = new Set([...correct.upright, ...correct.reversed].map(norm));
+  const balanceOk = c => {
+    const cKws = [...c.upright, ...c.reversed].map(norm);
+    return cKws.filter(k => correctKws.has(k)).length / Math.max(cKws.length, 1) < 0.5;
+  };
+
+  if (correct.id < 22) {
+    // ── Major Arcana: cluster → sequence proximity → keyword overlap ──
+    const candidates = pool.filter(c => c.id !== correct.id && c.id < 22);
+    if (candidates.length <= count) return shuffle(candidates);
+
+    const neighbors = MAJOR_NEIGHBORS[correct.id] || [];
+    const scored = candidates.map(c => {
+      const neighborPos  = neighbors.indexOf(c.id);
+      const clusterScore = neighborPos !== -1 ? 10 - neighborPos : 0;
+      const seqScore     = Math.max(0, 6 - Math.abs(c.id - correct.id));
+      const cKws         = [...c.upright, ...c.reversed].map(norm);
+      const kwScore      = cKws.filter(k => correctKws.has(k)).length;
+      return { card: c, total: clusterScore + seqScore + kwScore + Math.random() * 0.8 };
+    });
+    scored.sort((a, b) => b.total - a.total);
+    const filtered = scored.filter(({ card: c }) => balanceOk(c));
+    const src = filtered.length >= count ? filtered : scored;
+    return src.slice(0, count).map(s => s.card);
+
+  } else {
+    // ── Minor Arcana: rank/suit axes ─────────────────────────────────
+    const candidates = pool.filter(c => c.id !== correct.id && !!c.suit);
+    if (candidates.length <= count) return shuffle(candidates);
+
+    const correctRankIdx = MINOR_RANKS.indexOf(correct.name.split(' ')[0]);
+    const correctSuit    = correct.suit;
+
+    const scored = candidates.map(c => {
+      const cRankIdx = MINOR_RANKS.indexOf(c.name.split(' ')[0]);
+      const sameSuit = c.suit === correctSuit;
+      const sameRank = cRankIdx === correctRankIdx;
+      const rankDist = Math.abs(cRankIdx - correctRankIdx);
+
+      let score = 0;
+      if (sameRank && !sameSuit)          score = 40;
+      else if (sameSuit && rankDist <= 2) score = 30;
+      else if (sameSuit)                  score = 20;
+      else if (rankDist <= 2)             score = 10;
+      return { card: c, score: score + Math.random() * 5 };
+    });
+    scored.sort((a, b) => b.score - a.score);
+    const filtered = scored.filter(({ card: c }) => balanceOk(c));
+    const src = filtered.length >= count ? filtered : scored;
+    return src.slice(0, count).map(s => s.card);
+  }
 }
 
 function generateSuitLogicQuestion() {
