@@ -518,8 +518,87 @@ function shuffle(arr) {
   return a;
 }
 
+const MAJOR_NEIGHBORS = {
+   0: [ 1, 12, 17, 20],  // Fool           → Magician, Hanged Man, Star, Judgement
+   1: [ 7, 21,  0],      // Magician       → Chariot, World, Fool
+   2: [18,  9, 12],      // High Priestess → Moon, Hermit, Hanged Man
+   3: [ 6, 21, 19],      // Empress        → Lovers, World, Sun
+   4: [ 7,  5, 11],      // Emperor        → Chariot, Hierophant, Justice
+   5: [ 4, 11,  9],      // Hierophant     → Emperor, Justice, Hermit
+   6: [14,  3,  7],      // Lovers         → Temperance, Empress, Chariot
+   7: [ 4,  1,  8],      // Chariot        → Emperor, Magician, Strength
+   8: [11, 14,  7],      // Strength       → Justice, Temperance, Chariot
+   9: [ 2, 12,  5],      // Hermit         → High Priestess, Hanged Man, Hierophant
+  10: [13, 16, 20],      // Wheel          → Death, Tower, Judgement
+  11: [ 8, 14,  4],      // Justice        → Strength, Temperance, Emperor
+  12: [ 9,  2,  0],      // Hanged Man     → Hermit, High Priestess, Fool
+  13: [15, 16, 10],      // Death          → Devil, Tower, Wheel
+  14: [ 6,  8, 11],      // Temperance     → Lovers, Strength, Justice
+  15: [13, 16, 10],      // Devil          → Death, Tower, Wheel
+  16: [15, 13, 10],      // Tower          → Devil, Death, Wheel
+  17: [18, 19, 20],      // Star           → Moon, Sun, Judgement
+  18: [17, 19,  2],      // Moon           → Star, Sun, High Priestess
+  19: [18, 17,  3],      // Sun            → Moon, Star, Empress
+  20: [21, 17, 13],      // Judgement      → World, Star, Death
+  21: [20,  3,  1],      // World          → Judgement, Empress, Magician
+};
+
+const MINOR_RANKS = ['Ace','Two','Three','Four','Five','Six','Seven',
+                     'Eight','Nine','Ten','Page','Knight','Queen','King'];
+
 function pickDistractors(correct, pool, count = 3) {
-  return shuffle(pool.filter(c => c.id !== correct.id)).slice(0, count);
+  const norm = s => s.toLowerCase().replace(/[^a-z]/g, '');
+  const correctKws = new Set([...correct.upright, ...correct.reversed].map(norm));
+  const balanceOk = c => {
+    const cKws = [...c.upright, ...c.reversed].map(norm);
+    return cKws.filter(k => correctKws.has(k)).length / Math.max(cKws.length, 1) < 0.5;
+  };
+
+  if (correct.id < 22) {
+    // ── Major Arcana: cluster → sequence proximity → keyword overlap ──
+    const candidates = pool.filter(c => c.id !== correct.id && c.id < 22);
+    if (candidates.length <= count) return shuffle(candidates);
+
+    const neighbors = MAJOR_NEIGHBORS[correct.id] || [];
+    const scored = candidates.map(c => {
+      const neighborPos  = neighbors.indexOf(c.id);
+      const clusterScore = neighborPos !== -1 ? 10 - neighborPos : 0;
+      const seqScore     = Math.max(0, 6 - Math.abs(c.id - correct.id));
+      const cKws         = [...c.upright, ...c.reversed].map(norm);
+      const kwScore      = cKws.filter(k => correctKws.has(k)).length;
+      return { card: c, total: clusterScore + seqScore + kwScore + Math.random() * 0.8 };
+    });
+    scored.sort((a, b) => b.total - a.total);
+    const filtered = scored.filter(({ card: c }) => balanceOk(c));
+    const src = filtered.length >= count ? filtered : scored;
+    return src.slice(0, count).map(s => s.card);
+
+  } else {
+    // ── Minor Arcana: rank/suit axes ─────────────────────────────────
+    const candidates = pool.filter(c => c.id !== correct.id && !!c.suit);
+    if (candidates.length <= count) return shuffle(candidates);
+
+    const correctRankIdx = MINOR_RANKS.indexOf(correct.name.split(' ')[0]);
+    const correctSuit    = correct.suit;
+
+    const scored = candidates.map(c => {
+      const cRankIdx = MINOR_RANKS.indexOf(c.name.split(' ')[0]);
+      const sameSuit = c.suit === correctSuit;
+      const sameRank = cRankIdx === correctRankIdx;
+      const rankDist = Math.abs(cRankIdx - correctRankIdx);
+
+      let score = 0;
+      if (sameRank && !sameSuit)          score = 40;
+      else if (sameSuit && rankDist <= 2) score = 30;
+      else if (sameSuit)                  score = 20;
+      else if (rankDist <= 2)             score = 10;
+      return { card: c, score: score + Math.random() * 5 };
+    });
+    scored.sort((a, b) => b.score - a.score);
+    const filtered = scored.filter(({ card: c }) => balanceOk(c));
+    const src = filtered.length >= count ? filtered : scored;
+    return src.slice(0, count).map(s => s.card);
+  }
 }
 
 function generateSuitLogicQuestion() {
@@ -822,7 +901,7 @@ export default function App() {
   // Deck filter for quizzes
   const [quizDeck, setQuizDeck] = useState("all");
   const [quizOrientation, setQuizOrientation] = useState("both");
-  const [pendingConfidence, setPendingConfidence] = useState(false);
+  const [guessed, setGuessed] = useState(false);
   const resultShownAt = useRef(0);
 
   useEffect(() => {
@@ -868,7 +947,7 @@ export default function App() {
   const startQuiz = useCallback((mode) => {
     setQuizMode(mode);
     setSessionCorrect(0); setSessionTotal(0); setCurrentStreak(0);
-    setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null); setPendingConfidence(false);
+    setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null); setGuessed(false);
     if (mode === "suit-logic") {
       setCurrentQ(generateSuitLogicQuestion());
       setScreen("quiz");
@@ -899,7 +978,7 @@ export default function App() {
   }, [getCardSRS, bestStreak, currentStreak, unlockedMinor, totalSessions, saveRef]);
 
   const nextQuestion = useCallback(() => {
-    setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null); setPendingConfidence(false);
+    setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null); setGuessed(false);
     if (quizMode === "suit-logic") {
       setCurrentQ(generateSuitLogicQuestion());
       return;
@@ -917,17 +996,18 @@ export default function App() {
     setSelectedAnswer(option);
     setShowResult(true);
     resultShownAt.current = Date.now();
-    if (option.correct) {
-      setPendingConfidence(true);
-    } else {
+    if (!option.correct) {
       recordAnswer(false, currentQ.card.id, "wrong");
     }
   }, [showResult, currentQ, recordAnswer]);
 
-  const handleConfidence = useCallback((confidence) => {
-    recordAnswer(true, currentQ.card.id, confidence);
+  // Advancing is the "knew it" signal; tapping "I guessed" beforehand overrides it to "lucky".
+  const advance = useCallback(() => {
+    if (showResult && selectedAnswer?.correct) {
+      recordAnswer(true, currentQ.card.id, guessed ? "lucky" : "knew");
+    }
     nextQuestion();
-  }, [currentQ, recordAnswer, nextQuestion]);
+  }, [showResult, selectedAnswer, currentQ, guessed, recordAnswer, nextQuestion]);
 
   const handleTypeSubmit = useCallback(() => {
     if (showResult || !typedInput.trim()) return;
@@ -1225,12 +1305,8 @@ export default function App() {
       // After answering
       if (showResult) {
         if (Date.now() - resultShownAt.current < 500) return;
-        if (pendingConfidence) {
-          if (e.key === "Enter" || e.key === "k") { e.preventDefault(); handleConfidence("knew"); return; }
-          if (e.key === "g") { e.preventDefault(); handleConfidence("lucky"); return; }
-        } else if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault(); nextQuestion(); return;
-        }
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); advance(); return; }
+        if (e.key === "g" && selectedAnswer?.correct && !guessed) { e.preventDefault(); setGuessed(true); return; }
       }
 
       // Multiple choice: a/b/c/d or 1/2/3/4 to select answer
@@ -1260,7 +1336,7 @@ export default function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [screen, currentQ, showResult, pendingConfidence, nextQuestion, handleAnswer, handleConfidence, handleTypeSubmit, endQuiz]);
+  }, [screen, currentQ, showResult, selectedAnswer, guessed, advance, handleAnswer, handleTypeSubmit, endQuiz]);
 
   // ─── SIGN-IN SCREEN ───
   if (authLoading) {
@@ -1712,17 +1788,21 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                {pendingConfidence ? (
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <button className="nav-btn nav-btn-primary" style={{ flex: 1 }} onClick={() => handleConfidence("knew")}>
-                      ✦ Knew it <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span>
-                    </button>
-                    <button className="nav-btn nav-btn-ghost" style={{ flex: 1 }} onClick={() => handleConfidence("lucky")}>
-                      Lucky guess <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[G]</span>
-                    </button>
-                  </div>
-                ) : (
-                  <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={nextQuestion}>Next Card → <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span></button>
+                <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={advance}>Next Card → <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span></button>
+                {selectedAnswer?.correct && (
+                  <button
+                    onClick={() => setGuessed(true)}
+                    disabled={guessed}
+                    style={{
+                      display: "block", width: "100%", marginTop: 10, padding: "6px 0",
+                      background: "transparent", border: "none",
+                      fontFamily: "'Raleway', sans-serif", fontSize: 12, fontWeight: 300, letterSpacing: 0.5,
+                      color: guessed ? "#c9a84c" : "rgba(201,168,76,0.55)",
+                      cursor: guessed ? "default" : "pointer",
+                    }}
+                  >
+                    {guessed ? "✓ Marked as guessed" : "I guessed"} <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[G]</span>
+                  </button>
                 )}
               </div>
             )}
