@@ -901,7 +901,7 @@ export default function App() {
   // Deck filter for quizzes
   const [quizDeck, setQuizDeck] = useState("all");
   const [quizOrientation, setQuizOrientation] = useState("both");
-  const [pendingConfidence, setPendingConfidence] = useState(false);
+  const [guessed, setGuessed] = useState(false);
   const resultShownAt = useRef(0);
 
   useEffect(() => {
@@ -947,7 +947,7 @@ export default function App() {
   const startQuiz = useCallback((mode) => {
     setQuizMode(mode);
     setSessionCorrect(0); setSessionTotal(0); setCurrentStreak(0);
-    setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null); setPendingConfidence(false);
+    setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null); setGuessed(false);
     if (mode === "suit-logic") {
       setCurrentQ(generateSuitLogicQuestion());
       setScreen("quiz");
@@ -978,7 +978,7 @@ export default function App() {
   }, [getCardSRS, bestStreak, currentStreak, unlockedMinor, totalSessions, saveRef]);
 
   const nextQuestion = useCallback(() => {
-    setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null); setPendingConfidence(false);
+    setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null); setGuessed(false);
     if (quizMode === "suit-logic") {
       setCurrentQ(generateSuitLogicQuestion());
       return;
@@ -996,17 +996,18 @@ export default function App() {
     setSelectedAnswer(option);
     setShowResult(true);
     resultShownAt.current = Date.now();
-    if (option.correct) {
-      setPendingConfidence(true);
-    } else {
+    if (!option.correct) {
       recordAnswer(false, currentQ.card.id, "wrong");
     }
   }, [showResult, currentQ, recordAnswer]);
 
-  const handleConfidence = useCallback((confidence) => {
-    recordAnswer(true, currentQ.card.id, confidence);
+  // Advancing is the "knew it" signal; tapping "I guessed" beforehand overrides it to "lucky".
+  const advance = useCallback(() => {
+    if (showResult && selectedAnswer?.correct) {
+      recordAnswer(true, currentQ.card.id, guessed ? "lucky" : "knew");
+    }
     nextQuestion();
-  }, [currentQ, recordAnswer, nextQuestion]);
+  }, [showResult, selectedAnswer, currentQ, guessed, recordAnswer, nextQuestion]);
 
   const handleTypeSubmit = useCallback(() => {
     if (showResult || !typedInput.trim()) return;
@@ -1304,12 +1305,8 @@ export default function App() {
       // After answering
       if (showResult) {
         if (Date.now() - resultShownAt.current < 500) return;
-        if (pendingConfidence) {
-          if (e.key === "Enter" || e.key === "k") { e.preventDefault(); handleConfidence("knew"); return; }
-          if (e.key === "g") { e.preventDefault(); handleConfidence("lucky"); return; }
-        } else if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault(); nextQuestion(); return;
-        }
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); advance(); return; }
+        if (e.key === "g" && selectedAnswer?.correct && !guessed) { e.preventDefault(); setGuessed(true); return; }
       }
 
       // Multiple choice: a/b/c/d or 1/2/3/4 to select answer
@@ -1339,7 +1336,7 @@ export default function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [screen, currentQ, showResult, pendingConfidence, nextQuestion, handleAnswer, handleConfidence, handleTypeSubmit, endQuiz]);
+  }, [screen, currentQ, showResult, selectedAnswer, guessed, advance, handleAnswer, handleTypeSubmit, endQuiz]);
 
   // ─── SIGN-IN SCREEN ───
   if (authLoading) {
@@ -1791,17 +1788,21 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                {pendingConfidence ? (
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <button className="nav-btn nav-btn-primary" style={{ flex: 1 }} onClick={() => handleConfidence("knew")}>
-                      ✦ Knew it <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span>
-                    </button>
-                    <button className="nav-btn nav-btn-ghost" style={{ flex: 1 }} onClick={() => handleConfidence("lucky")}>
-                      Lucky guess <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[G]</span>
-                    </button>
-                  </div>
-                ) : (
-                  <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={nextQuestion}>Next Card → <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span></button>
+                <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={advance}>Next Card → <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span></button>
+                {selectedAnswer?.correct && (
+                  <button
+                    onClick={() => setGuessed(true)}
+                    disabled={guessed}
+                    style={{
+                      display: "block", width: "100%", marginTop: 10, padding: "6px 0",
+                      background: "transparent", border: "none",
+                      fontFamily: "'Raleway', sans-serif", fontSize: 12, fontWeight: 300, letterSpacing: 0.5,
+                      color: guessed ? "#c9a84c" : "rgba(201,168,76,0.55)",
+                      cursor: guessed ? "default" : "pointer",
+                    }}
+                  >
+                    {guessed ? "✓ Marked as guessed" : "I guessed"} <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[G]</span>
+                  </button>
                 )}
               </div>
             )}
