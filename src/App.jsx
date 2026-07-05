@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import VoiceDrillMode from "./voice/VoiceDrillMode";
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
@@ -433,6 +434,24 @@ function updateSRS(card, correct, confidence = "knew") {
     ease = Math.max(1.3, ease - 0.2);
   }
   return { ...card, interval, ease, streak, totalCorrect, totalAttempts, nextReview: now + interval * 60000 };
+}
+
+// Aggregate per-mode stats so the visual quiz and Voice Drill can be compared
+// later. Buckets by the raw confidence label the user expressed (voice) or an
+// equivalent tag (quiz), plus overall reviewed/correct counts.
+function tallyModeStats(stats, mode, correct, confidenceLevel) {
+  const s = { ...(stats || {}) };
+  const m = { reviewed: 0, correct: 0, byConfidence: {}, ...(s[mode] || {}) };
+  m.byConfidence = { ...(m.byConfidence || {}) };
+  m.reviewed += 1;
+  if (correct) m.correct += 1;
+  const key = confidenceLevel || "unspecified";
+  const b = { total: 0, correct: 0, ...(m.byConfidence[key] || {}) };
+  b.total += 1;
+  if (correct) b.correct += 1;
+  m.byConfidence[key] = b;
+  s[mode] = m;
+  return s;
 }
 
 function getMasteryLevel(srs) {
@@ -874,6 +893,8 @@ export default function App() {
   const [currentStreak, setCurrentStreak] = useState(0);
   const [bestStreak, setBestStreak] = useState(0);
   const [totalSessions, setTotalSessions] = useState(0);
+  const [modeStats, setModeStats] = useState({});
+  const modeStatsRef = useRef({});
   const [quizMode, setQuizMode] = useState("mixed");
   const [currentQ, setCurrentQ] = useState(null);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
@@ -911,12 +932,15 @@ export default function App() {
       setBestStreak(cloudData.bestStreak || 0);
       setTotalSessions(cloudData.totalSessions || 0);
       setPersonalNotes(cloudData.personalNotes || {});
+      const loadedModeStats = cloudData.modeStats || {};
+      modeStatsRef.current = loadedModeStats;
+      setModeStats(loadedModeStats);
       setSynced(true);
     }
   }, [cloudData, synced]);
 
   const saveRef = useCallback((newSrs, newUnlocked, newBest, newSessions, newNotes) => {
-    save({ srsData: newSrs, unlockedMinor: newUnlocked, bestStreak: newBest, totalSessions: newSessions, personalNotes: newNotes || personalNotes });
+    save({ srsData: newSrs, unlockedMinor: newUnlocked, bestStreak: newBest, totalSessions: newSessions, personalNotes: newNotes || personalNotes, modeStats: modeStatsRef.current });
   }, [save, personalNotes]);
 
   useEffect(() => {
@@ -963,12 +987,16 @@ export default function App() {
     setScreen("quiz");
   }, [getQuizPool, quizDeck, quizOrientation, getCardSRS, srsData]);
 
-  const recordAnswer = useCallback((correct, cardId, confidence = "knew") => {
+  const recordAnswer = useCallback((correct, cardId, confidence = "knew", meta = {}) => {
+    const { mode = "quiz", confidenceLevel = null } = meta;
     setSessionTotal(p => p + 1);
     if (correct) {
       setSessionCorrect(p => p + 1);
       setCurrentStreak(p => { const ns = p + 1; setBestStreak(b => Math.max(b, ns)); return ns; });
     } else { setCurrentStreak(0); }
+    const nextModeStats = tallyModeStats(modeStatsRef.current, mode, correct, confidenceLevel);
+    modeStatsRef.current = nextModeStats;
+    setModeStats(nextModeStats);
     setSrsData(prev => {
       const updated = { ...prev, [cardId]: updateSRS(getCardSRS(cardId), correct, confidence) };
       const newBest = correct ? Math.max(bestStreak, currentStreak + 1) : bestStreak;
@@ -997,14 +1025,14 @@ export default function App() {
     setShowResult(true);
     resultShownAt.current = Date.now();
     if (!option.correct) {
-      recordAnswer(false, currentQ.card.id, "wrong");
+      recordAnswer(false, currentQ.card.id, "wrong", { mode: "quiz", confidenceLevel: null });
     }
   }, [showResult, currentQ, recordAnswer]);
 
   // Advancing is the "knew it" signal; tapping "I guessed" beforehand overrides it to "lucky".
   const advance = useCallback(() => {
     if (showResult && selectedAnswer?.correct) {
-      recordAnswer(true, currentQ.card.id, guessed ? "lucky" : "knew");
+      recordAnswer(true, currentQ.card.id, guessed ? "lucky" : "knew", { mode: "quiz", confidenceLevel: guessed ? "geraten" : "sicher" });
     }
     nextQuestion();
   }, [showResult, selectedAnswer, currentQ, guessed, recordAnswer, nextQuestion]);
@@ -1087,6 +1115,27 @@ export default function App() {
     saveRef(srsData, unlockedMinor, bestStreak, ns);
     setScreen("results");
   }, [totalSessions, srsData, unlockedMinor, bestStreak, saveRef]);
+
+  // ─── VOICE DRILL INTEGRATION ───
+  // Pull an SRS-ordered queue (due cards first, most overdue first), then fill
+  // with the rest so a session can run past the due pile. Wrap each card with an
+  // orientation the drill will read aloud (upright — the primary meanings).
+  const buildVoiceQueue = useCallback(() => {
+    const pool = [...availableCards];
+    const now = Date.now();
+    const due = pool.filter(c => getCardSRS(c.id).nextReview <= now)
+      .sort((a, b) => getCardSRS(a.id).nextReview - getCardSRS(b.id).nextReview);
+    const rest = shuffle(pool.filter(c => getCardSRS(c.id).nextReview > now));
+    const ordered = (due.length ? [...due, ...rest] : shuffle(pool));
+    return ordered.map(card => ({ card, isUpright: true }));
+  }, [availableCards, getCardSRS]);
+
+  // Voice self-grade → the same write path as the visual quiz, tagged mode:"voice".
+  // sicher/wackelig → "knew"; geraten → "lucky" (matches the quiz "I guessed" path).
+  const handleVoiceGrade = useCallback((cardId, correct, confidenceLevel) => {
+    const srsConfidence = correct ? (confidenceLevel === "geraten" ? "lucky" : "knew") : "wrong";
+    recordAnswer(correct, cardId, srsConfidence, { mode: "voice", confidenceLevel });
+  }, [recordAnswer]);
 
   const handleUnlockMinor = useCallback(() => {
     setUnlockedMinor(true);
@@ -1662,6 +1711,14 @@ export default function App() {
               </div>
             </div>
 
+            <div style={{ marginTop: 16 }}>
+              <button className="nav-btn nav-btn-primary" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                onClick={() => setScreen("voice")}>🎙 Voice Drill · Sprachmodus</button>
+              <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", textAlign: "center", marginTop: 6, fontWeight: 300 }}>
+                Hands-free audio recall — study while your hands are busy
+              </div>
+            </div>
+
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
               <button className="nav-btn nav-btn-ghost" style={{ flex: 1 }} onClick={() => setScreen("study")}>📖 Study</button>
               <button className="nav-btn nav-btn-ghost" style={{ flex: 1 }} onClick={() => setScreen("progress")}>📊 Progress</button>
@@ -1670,6 +1727,16 @@ export default function App() {
               <button className="nav-btn nav-btn-ghost" style={{ width: "100%" }} onClick={() => { setScreen("reference"); setRefSearch(""); }}>🔍 Quick Reference</button>
             </div>
           </div>
+        )}
+
+        {/* ═══ VOICE DRILL ═══ */}
+        {screen === "voice" && (
+          <VoiceDrillMode
+            buildQueue={buildVoiceQueue}
+            onGrade={handleVoiceGrade}
+            onExit={() => setScreen("home")}
+            modeStats={modeStats}
+          />
         )}
 
         {/* ═══ QUIZ ═══ */}

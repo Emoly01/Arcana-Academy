@@ -1,0 +1,580 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { parseUtterance } from "./commands";
+import { useSpeech } from "./useSpeech";
+import { useSpeechRecognition, getSpeechRecognition } from "./useSpeechRecognition";
+
+const GOLD = "#c9a84c";
+const CREAM = "#e8dcc8";
+const GREEN = "rgba(76,175,80,";
+const RED = "rgba(220,53,69,";
+
+const CONF_META = {
+  sicher:   { label: "Sicher",   sub: "confident", color: GREEN },
+  wackelig: { label: "Wackelig", sub: "unsure",    color: "rgba(201,168,76," },
+  geraten:  { label: "Geraten",  sub: "guessed",   color: RED },
+};
+
+// ─── VOICE DRILL — ears-first, hands-free active recall ───
+// The loop: speak card name → listen for "aufdecken" → read the meaning →
+// listen for self-grade + confidence → record through the SRS → next card.
+export default function VoiceDrillMode({ buildQueue, onGrade, onExit, modeStats }) {
+  const recognitionSupported = !!getSpeechRecognition();
+  const { speak, cancel, supported: ttsSupported, hasEnglishVoice, voicesReady } = useSpeech();
+  const supported = recognitionSupported && ttsSupported;
+
+  // ── UI state (mirrors of the imperative refs below) ──
+  const [phase, setPhase] = useState("ready");     // ready | running | summary
+  const [step, setStep] = useState("asking");       // asking | listen-reveal | revealing | listen-grade
+  const [paused, setPaused] = useState(false);
+  const [card, setCard] = useState(null);
+  const [revealed, setRevealed] = useState(false);
+  const [needConfidence, setNeedConfidence] = useState(false);
+  const [pendingGrade, setPendingGrade] = useState(null);
+  const [lastHeard, setLastHeard] = useState("");
+  const [sessionItems, setSessionItems] = useState([]);
+
+  // ── imperative state (read inside async flows / recognition callback) ──
+  const mountedRef = useRef(true);
+  const phaseRef = useRef("ready");
+  const stepRef = useRef("asking");
+  const pausedRef = useRef(false);
+  const cardRef = useRef(null);
+  const pendingRef = useRef({ grade: null, confidence: null });
+  const queueRef = useRef([]);
+  const idxRef = useRef(0);
+  const sessionRef = useRef({ items: [] });
+  const fns = useRef({});
+
+  const onDenied = useCallback(() => {}, []);
+  const handleUtteranceRef = useRef(() => {});
+  const stableOnResult = useCallback((t) => handleUtteranceRef.current(t), []);
+  const rec = useSpeechRecognition({ lang: "de-DE", onResult: stableOnResult, onPermissionDenied: onDenied });
+
+  // Runs once: tear down mic + TTS on unmount only. rec.stop and cancel are
+  // stable callbacks, so capturing them from the first render is safe — and we
+  // must NOT depend on `rec` (a fresh object each render) or this would fire
+  // every re-render and set mountedRef=false mid-session, killing the loop.
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      try { rec.stop(); } catch (e) {}
+      cancel();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const guardActive = () =>
+    mountedRef.current && !pausedRef.current && phaseRef.current === "running";
+
+  // Re-assign the flow functions on every render so they always close over the
+  // latest props (buildQueue/onGrade) while being invoked through a stable ref.
+  fns.current.startListening = () => {
+    if (mountedRef.current && !pausedRef.current) rec.start();
+  };
+
+  fns.current.speakAndPause = async (text, opts) => {
+    rec.stop();               // don't let the app hear itself
+    await speak(text, opts);
+  };
+
+  fns.current.askCard = async (item) => {
+    cardRef.current = item;
+    setCard(item);
+    setRevealed(false);
+    pendingRef.current = { grade: null, confidence: null };
+    setPendingGrade(null);
+    setNeedConfidence(false);
+    stepRef.current = "asking"; setStep("asking");
+    await fns.current.speakAndPause(item.card.name, { rate: 0.95 });
+    if (!guardActive()) return;
+    stepRef.current = "listen-reveal"; setStep("listen-reveal");
+    fns.current.startListening();
+  };
+
+  fns.current.reveal = async () => {
+    if (stepRef.current !== "listen-reveal" && stepRef.current !== "asking") return;
+    const item = cardRef.current;
+    if (!item) return;
+    setRevealed(true);
+    stepRef.current = "revealing"; setStep("revealing");
+    const meanings = (item.isUpright ? item.card.upright : item.card.reversed).join(", ");
+    await fns.current.speakAndPause(`${meanings}. ${item.card.keywords}`, { rate: 0.82 });
+    if (!guardActive()) return;
+    stepRef.current = "listen-grade"; setStep("listen-grade");
+    fns.current.startListening();
+  };
+
+  fns.current.repeatCurrent = async () => {
+    const item = cardRef.current;
+    if (!item) return;
+    if (stepRef.current === "listen-grade" || stepRef.current === "revealing") {
+      stepRef.current = "revealing"; setStep("revealing");
+      const meanings = (item.isUpright ? item.card.upright : item.card.reversed).join(", ");
+      await fns.current.speakAndPause(`${meanings}. ${item.card.keywords}`, { rate: 0.82 });
+      if (!guardActive()) return;
+      stepRef.current = "listen-grade"; setStep("listen-grade");
+      fns.current.startListening();
+    } else {
+      stepRef.current = "asking"; setStep("asking");
+      await fns.current.speakAndPause(item.card.name, { rate: 0.95 });
+      if (!guardActive()) return;
+      stepRef.current = "listen-reveal"; setStep("listen-reveal");
+      fns.current.startListening();
+    }
+  };
+
+  fns.current.commit = (correct, confidence) => {
+    const item = cardRef.current;
+    if (!item) return;
+    rec.stop();
+    onGrade(item.card.id, correct, confidence);
+    sessionRef.current.items.push({ name: item.card.name, correct, confidence });
+    setSessionItems([...sessionRef.current.items]);
+    pendingRef.current = { grade: null, confidence: null };
+    setPendingGrade(null);
+    setNeedConfidence(false);
+    fns.current.next();
+  };
+
+  fns.current.maybeCommit = () => {
+    const p = pendingRef.current;
+    setPendingGrade(p.grade);
+    if (!p.grade) {
+      // confidence expressed before a grade — keep waiting for the grade
+      if (p.confidence) setNeedConfidence(false);
+      return;
+    }
+    // A wrong answer commits immediately; a correct one asks for confidence
+    // if none was given in the same breath (calibration matters most here).
+    if (p.grade === "correct" && !p.confidence) {
+      setNeedConfidence(true);
+      return;
+    }
+    fns.current.commit(p.grade === "correct", p.confidence || null);
+  };
+
+  fns.current.next = () => {
+    idxRef.current += 1;
+    if (idxRef.current >= queueRef.current.length) {
+      queueRef.current = buildQueue();
+      idxRef.current = 0;
+    }
+    const nextItem = queueRef.current[idxRef.current];
+    if (!nextItem) { fns.current.finish(); return; }
+    fns.current.askCard(nextItem);
+  };
+
+  fns.current.doPause = () => {
+    pausedRef.current = true; setPaused(true);
+    rec.stop();
+    cancel();
+  };
+
+  fns.current.doResume = () => {
+    if (!pausedRef.current) return;
+    pausedRef.current = false; setPaused(false);
+    fns.current.repeatCurrent();
+  };
+
+  fns.current.finish = () => {
+    phaseRef.current = "summary"; setPhase("summary");
+    rec.stop();
+    cancel();
+  };
+
+  // ── the recognition callback (kept fresh via ref) ──
+  handleUtteranceRef.current = (transcript) => {
+    if (!transcript) return;
+    setLastHeard(transcript);
+    const p = parseUtterance(transcript);
+    if (!p.recognized) return; // log quietly, never interrupt with an error sound
+    if (p.stop) { fns.current.finish(); return; }
+    if (p.pause) { fns.current.doPause(); return; }
+    if (p.resume) { fns.current.doResume(); return; }
+    if (pausedRef.current) return;
+    if (p.repeat) { fns.current.repeatCurrent(); return; }
+
+    const s = stepRef.current;
+    if (s === "listen-reveal") {
+      if (p.reveal) fns.current.reveal();
+      return;
+    }
+    if (s === "listen-grade") {
+      if (p.grade) pendingRef.current.grade = p.grade;
+      if (p.confidence) pendingRef.current.confidence = p.confidence;
+      if (p.grade || p.confidence) fns.current.maybeCommit();
+    }
+  };
+
+  // ── tap-target handlers: identical effect to the spoken commands ──
+  const beginSession = () => {
+    const q = buildQueue();
+    queueRef.current = q; idxRef.current = 0;
+    sessionRef.current = { items: [] };
+    setSessionItems([]);
+    phaseRef.current = "running"; setPhase("running");
+    if (!q.length) { fns.current.finish(); return; }
+    fns.current.askCard(q[0]);
+  };
+  const tapReveal = () => fns.current.reveal();
+  const tapGrade = (g) => {
+    if (stepRef.current !== "listen-grade" && stepRef.current !== "revealing") return;
+    pendingRef.current.grade = g;
+    fns.current.maybeCommit();
+  };
+  const tapConfidence = (c) => {
+    pendingRef.current.confidence = c;
+    fns.current.maybeCommit();
+  };
+  const tapRepeat = () => fns.current.repeatCurrent();
+  const tapPauseResume = () => (pausedRef.current ? fns.current.doResume() : fns.current.doPause());
+  const tapStop = () => fns.current.finish();
+
+  // ─────────────────────────────── RENDER ───────────────────────────────
+  const title = (
+    <>
+      <style>{`
+        @keyframes breathe { 0%, 100% { opacity: 0.35; transform: scale(1); } 50% { opacity: 1; transform: scale(1.25); } }
+      `}</style>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 16, gap: 12 }}>
+        <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 14px", fontSize: 11 }}
+          onClick={() => { fns.current.finish(); onExit(); }}>← Back</button>
+        <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 18, fontWeight: 500, letterSpacing: 2, color: GOLD }}>
+          🎙 Voice Drill · Sprachmodus
+        </h2>
+      </div>
+    </>
+  );
+
+  if (!supported) {
+    return (
+      <div>
+        {title}
+        <div style={{ padding: 20, background: "rgba(201,168,76,0.05)", border: "1px solid rgba(201,168,76,0.15)", borderRadius: 16, textAlign: "center" }}>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>🦉</div>
+          <div style={{ fontFamily: "'Cinzel', serif", fontSize: 16, color: CREAM, marginBottom: 8 }}>Voice Drill needs Chrome</div>
+          <p style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.6)", lineHeight: 1.6, fontWeight: 300 }}>
+            This ears-first mode relies on the Web Speech API, which today only works reliably in
+            Chromium-based browsers (Chrome, Edge, Brave). Open Arcana Academy there to study hands-free.
+            {" "}Every other mode works everywhere.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {title}
+
+      {phase === "ready" && (
+        <div>
+          <div style={{ padding: "24px 20px", background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.12)", borderRadius: 16, marginBottom: 16 }}>
+            <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: CREAM, lineHeight: 1.7, fontWeight: 300 }}>
+              A hands-free recall loop. I speak a card, you recall its meaning, then say
+              <b style={{ color: GOLD }}> "aufdecken"</b> to hear the answer. Grade yourself out loud —
+              you'll never need to touch the screen. Best studied while your hands are busy.
+            </div>
+          </div>
+          <CommandCheatSheet />
+          {voicesReady && !hasEnglishVoice && (
+            <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(220,53,69,0.7)", margin: "12px 2px", fontWeight: 300 }}>
+              ⚠ No English voice found on this device — falling back to the system default. Card names may sound off.
+            </div>
+          )}
+          <button className="nav-btn nav-btn-primary" style={{ width: "100%", padding: "16px", fontSize: 15, marginTop: 8 }}
+            onClick={beginSession}>
+            ✦ Begin Drill ✦
+          </button>
+          <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", textAlign: "center", marginTop: 10, fontWeight: 300 }}>
+            Your browser will ask for microphone access.
+          </div>
+        </div>
+      )}
+
+      {phase === "running" && (
+        <RunningView
+          card={card} step={step} paused={paused} revealed={revealed}
+          listening={rec.listening} micError={rec.error} lastHeard={lastHeard}
+          needConfidence={needConfidence} pendingGrade={pendingGrade}
+          reviewed={sessionItems.length}
+          onReveal={tapReveal} onGrade={tapGrade} onConfidence={tapConfidence}
+          onRepeat={tapRepeat} onPauseResume={tapPauseResume} onStop={tapStop}
+          onRetryMic={() => rec.start()}
+        />
+      )}
+
+      {phase === "summary" && (
+        <SummaryView items={sessionItems} modeStats={modeStats}
+          onAgain={beginSession} onHome={onExit} />
+      )}
+    </div>
+  );
+}
+
+// ── Sub-views ──────────────────────────────────────────────────────────
+
+function CommandCheatSheet() {
+  const rows = [
+    ["aufdecken / reveal", "hear the answer"],
+    ["hatte ich / correct", "you got it right"],
+    ["daneben / wrong", "you missed it"],
+    ["sicher · wackelig · geraten", "how confident you were"],
+    ["wiederholen / repeat", "hear it again"],
+    ["pause · weiter", "pause / resume listening"],
+    ["stopp / fertig", "end the session"],
+  ];
+  return (
+    <div style={{ padding: "16px 18px", background: "rgba(201,168,76,0.03)", border: "1px solid rgba(201,168,76,0.1)", borderRadius: 14 }}>
+      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, letterSpacing: 1, color: "rgba(201,168,76,0.7)", marginBottom: 10 }}>VOICE COMMANDS</div>
+      {rows.map(([cmd, desc]) => (
+        <div key={cmd} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "4px 0", fontFamily: "'Raleway', sans-serif", fontSize: 12.5 }}>
+          <span style={{ color: GOLD, fontWeight: 400 }}>{cmd}</span>
+          <span style={{ color: "rgba(201,168,76,0.45)", fontWeight: 300, textAlign: "right" }}>{desc}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StatusPill({ paused, listening, step }) {
+  let label, color, dot;
+  if (paused) { label = "Paused"; color = "rgba(201,168,76,0.6)"; dot = "rgba(201,168,76,0.5)"; }
+  else if (step === "asking" || step === "revealing") { label = "Speaking…"; color = GOLD; dot = GOLD; }
+  else if (listening) { label = "Listening…"; color = "rgba(76,175,80,0.9)"; dot = "rgba(76,175,80,0.9)"; }
+  else { label = "…"; color = "rgba(201,168,76,0.5)"; dot = "rgba(201,168,76,0.4)"; }
+  const speaking = step === "asking" || step === "revealing";
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 8 }}>
+      <span style={{
+        width: 10, height: 10, borderRadius: "50%", background: dot,
+        animation: (listening && !paused && !speaking) ? "pulse 1.4s ease-in-out infinite" : (speaking ? "breathe 1.2s ease-in-out infinite" : "none"),
+        boxShadow: `0 0 10px ${dot}`,
+      }} />
+      <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, letterSpacing: 1, color, fontWeight: 400 }}>{label}</span>
+    </div>
+  );
+}
+
+function BigTap({ label, sub, onClick, tone = "gold", disabled }) {
+  const tones = {
+    gold: { bg: "rgba(201,168,76,0.1)", border: "rgba(201,168,76,0.4)", color: CREAM },
+    green: { bg: `${GREEN}0.12)`, border: `${GREEN}0.5)`, color: "#d4f5d6" },
+    red: { bg: `${RED}0.12)`, border: `${RED}0.5)`, color: "#f5d0d4" },
+  };
+  const t = tones[tone];
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      flex: 1, minWidth: 0, padding: "16px 10px", borderRadius: 14, cursor: disabled ? "default" : "pointer",
+      background: disabled ? "rgba(201,168,76,0.03)" : t.bg,
+      border: `1px solid ${disabled ? "rgba(201,168,76,0.1)" : t.border}`,
+      color: disabled ? "rgba(201,168,76,0.25)" : t.color,
+      fontFamily: "'Cinzel', serif", fontSize: 15, fontWeight: 500, transition: "all 0.2s ease",
+    }}>
+      {label}
+      {sub && <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, fontWeight: 300, opacity: 0.7, marginTop: 3, textTransform: "none", letterSpacing: 0 }}>{sub}</div>}
+    </button>
+  );
+}
+
+function RunningView({
+  card, step, paused, revealed, listening, micError, lastHeard, needConfidence, pendingGrade,
+  reviewed, onReveal, onGrade, onConfidence, onRepeat, onPauseResume, onStop, onRetryMic,
+}) {
+  const meanings = card ? (card.isUpright ? card.card.upright : card.card.reversed) : [];
+  return (
+    <div>
+      {micError === "mic-denied" && (
+        <div style={{ padding: 16, background: `${RED}0.08)`, border: `1px solid ${RED}0.3)`, borderRadius: 12, marginBottom: 14 }}>
+          <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(220,53,69,0.9)", lineHeight: 1.6 }}>
+            🎤 Microphone access is blocked. Enable it in your browser's site settings, then tap below.
+            You can still grade with the buttons in the meantime.
+          </div>
+          <button className="nav-btn nav-btn-ghost" style={{ marginTop: 10, padding: "6px 14px", fontSize: 11 }} onClick={onRetryMic}>Retry microphone</button>
+        </div>
+      )}
+
+      <div style={{ textAlign: "center", padding: "18px 0 10px" }}>
+        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, letterSpacing: 2, color: "rgba(201,168,76,0.4)", marginBottom: 10 }}>
+          {reviewed} REVIEWED {card && card.isUpright === false ? "· REVERSED" : ""}
+        </div>
+        <div style={{
+          fontFamily: "'Cinzel', serif", fontWeight: 600, letterSpacing: 1, lineHeight: 1.15,
+          fontSize: card && card.card.name.length > 16 ? 30 : 38,
+          background: "linear-gradient(135deg, #c9a84c, #e8dcc8, #c9a84c)", backgroundSize: "200%",
+          WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+          minHeight: 50, padding: "0 8px",
+        }}>
+          {card ? card.card.name : "…"}
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <StatusPill paused={paused} listening={listening} step={step} />
+        </div>
+      </div>
+
+      {/* Revealed meaning, shown visually too */}
+      <div style={{
+        minHeight: 60, padding: revealed ? "14px 18px" : 0, margin: "6px 0 16px",
+        background: revealed ? "rgba(201,168,76,0.05)" : "transparent",
+        border: revealed ? "1px solid rgba(201,168,76,0.15)" : "1px solid transparent",
+        borderRadius: 14, transition: "all 0.3s ease", textAlign: "center",
+      }}>
+        {revealed ? (
+          <>
+            <div style={{ fontFamily: "'Crimson Text', serif", fontSize: 17, color: CREAM, lineHeight: 1.5 }}>
+              {meanings.join(" · ")}
+            </div>
+            <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.55)", marginTop: 8, fontStyle: "italic", fontWeight: 300 }}>
+              {card.card.keywords}
+            </div>
+          </>
+        ) : (
+          <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.35)", textAlign: "center", paddingTop: 18, fontWeight: 300 }}>
+            Recall the meaning, then say “aufdecken”
+          </div>
+        )}
+      </div>
+
+      {/* Tap targets mirror every voice command */}
+      {!paused && step === "listen-reveal" && (
+        <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+          <BigTap label="Aufdecken" sub="reveal" tone="gold" onClick={onReveal} />
+        </div>
+      )}
+
+      {!paused && (step === "listen-grade" || step === "revealing") && (
+        <>
+          {!needConfidence ? (
+            <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+              <BigTap label="Hatte ich" sub="correct" tone="green" onClick={() => onGrade("correct")} />
+              <BigTap label="Daneben" sub="wrong" tone="red" onClick={() => onGrade("wrong")} />
+            </div>
+          ) : (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: GOLD, textAlign: "center", marginBottom: 8, letterSpacing: 1 }}>
+                How confident? — sicher · wackelig · geraten
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {Object.entries(CONF_META).map(([key, m]) => (
+                  <BigTap key={key} label={m.label} sub={m.sub} tone={key === "sicher" ? "green" : key === "geraten" ? "red" : "gold"} onClick={() => onConfidence(key)} />
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Always-available controls */}
+      <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+        <button className="nav-btn nav-btn-ghost" style={{ flex: 1, padding: "10px", fontSize: 11 }} onClick={onRepeat}>↻ Wiederholen</button>
+        <button className="nav-btn nav-btn-ghost" style={{ flex: 1, padding: "10px", fontSize: 11 }} onClick={onPauseResume}>{paused ? "▶ Weiter" : "❚❚ Pause"}</button>
+        <button className="nav-btn nav-btn-ghost" style={{ flex: 1, padding: "10px", fontSize: 11, borderColor: `${RED}0.25)`, color: "rgba(220,53,69,0.7)" }} onClick={onStop}>■ Stopp</button>
+      </div>
+
+      <div style={{ marginTop: 16, textAlign: "center", fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.35)", fontWeight: 300, minHeight: 16 }}>
+        {lastHeard ? <>heard: “<span style={{ color: "rgba(201,168,76,0.6)" }}>{lastHeard}</span>”</> : " "}
+      </div>
+    </div>
+  );
+}
+
+function SummaryView({ items, modeStats, onAgain, onHome }) {
+  const reviewed = items.length;
+  const correct = items.filter((i) => i.correct).length;
+  const acc = reviewed ? Math.round((correct / reviewed) * 100) : 0;
+  const buckets = ["sicher", "wackelig", "geraten"].map((c) => {
+    const g = items.filter((i) => i.confidence === c);
+    return { c, total: g.length, correct: g.filter((x) => x.correct).length };
+  });
+  const unspecified = items.filter((i) => !i.confidence).length;
+
+  const voiceLifetime = modeStats?.voice;
+  const quizLifetime = modeStats?.quiz;
+
+  return (
+    <div>
+      <div style={{ textAlign: "center", marginBottom: 20 }}>
+        <div style={{ fontSize: 34, marginBottom: 8 }}>✦</div>
+        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 20, letterSpacing: 2, color: GOLD }}>Session Complete</div>
+      </div>
+
+      {reviewed === 0 ? (
+        <div style={{ textAlign: "center", fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.6)", marginBottom: 20, fontWeight: 300 }}>
+          No cards graded this session.
+        </div>
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+            <StatTile big={reviewed} label="Cards reviewed" />
+            <StatTile big={`${acc}%`} label="Accuracy" />
+            <StatTile big={`${correct}/${reviewed}`} label="Correct" />
+          </div>
+
+          <div style={{ padding: "16px 18px", background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.12)", borderRadius: 14, marginBottom: 16 }}>
+            <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, letterSpacing: 1, color: "rgba(201,168,76,0.7)", marginBottom: 12 }}>CALIBRATION — this session</div>
+            {buckets.map(({ c, total, correct: cc }) => {
+              const m = CONF_META[c];
+              const pct = total ? Math.round((cc / total) * 100) : 0;
+              return (
+                <div key={c} style={{ marginBottom: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'Raleway', sans-serif", fontSize: 12.5, marginBottom: 4 }}>
+                    <span style={{ color: CREAM }}>{m.label} <span style={{ color: "rgba(201,168,76,0.4)" }}>· {m.sub}</span></span>
+                    <span style={{ color: "rgba(201,168,76,0.6)" }}>{total ? `${cc}/${total} · ${pct}%` : "—"}</span>
+                  </div>
+                  <div style={{ height: 6, borderRadius: 3, background: "rgba(201,168,76,0.08)", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${pct}%`, background: `${m.color}0.6)`, transition: "width 0.4s ease" }} />
+                  </div>
+                </div>
+              );
+            })}
+            {unspecified > 0 && (
+              <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.35)", marginTop: 6, fontWeight: 300 }}>
+                {unspecified} graded without a stated confidence
+              </div>
+            )}
+            <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", marginTop: 10, lineHeight: 1.5, fontWeight: 300 }}>
+              High accuracy on “geraten” means you know more than you think. Low accuracy on “sicher” flags overconfidence.
+            </div>
+          </div>
+
+          {(voiceLifetime || quizLifetime) && (
+            <div style={{ padding: "14px 18px", background: "rgba(201,168,76,0.03)", border: "1px solid rgba(201,168,76,0.1)", borderRadius: 14, marginBottom: 16 }}>
+              <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, letterSpacing: 1, color: "rgba(201,168,76,0.7)", marginBottom: 10 }}>MODE COMPARISON — all time</div>
+              <ModeRow name="🎙 Voice" stats={voiceLifetime} />
+              <ModeRow name="🃏 Quiz" stats={quizLifetime} />
+            </div>
+          )}
+        </>
+      )}
+
+      <div style={{ display: "flex", gap: 10 }}>
+        <button className="nav-btn nav-btn-primary" style={{ flex: 1 }} onClick={onAgain}>Drill Again</button>
+        <button className="nav-btn nav-btn-ghost" style={{ flex: 1 }} onClick={onHome}>← Home</button>
+      </div>
+    </div>
+  );
+}
+
+function StatTile({ big, label }) {
+  return (
+    <div style={{ flex: 1, padding: "14px 8px", background: "rgba(201,168,76,0.05)", border: "1px solid rgba(201,168,76,0.12)", borderRadius: 12, textAlign: "center" }}>
+      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 22, color: GOLD, fontWeight: 600 }}>{big}</div>
+      <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.5)", letterSpacing: 0.5, marginTop: 4, fontWeight: 300 }}>{label}</div>
+    </div>
+  );
+}
+
+function ModeRow({ name, stats }) {
+  const reviewed = stats?.reviewed || 0;
+  const correct = stats?.correct || 0;
+  const pct = reviewed ? Math.round((correct / reviewed) * 100) : 0;
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'Raleway', sans-serif", fontSize: 12.5, padding: "4px 0", color: CREAM }}>
+      <span>{name}</span>
+      <span style={{ color: "rgba(201,168,76,0.6)" }}>
+        {reviewed ? `${reviewed} reviewed · ${pct}% correct` : "no data yet"}
+      </span>
+    </div>
+  );
+}
