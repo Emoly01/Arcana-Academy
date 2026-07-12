@@ -62,7 +62,11 @@ const COMMANDS = {
 
 function wordMatches(token, word) {
   if (token === word) return true;
-  if (word.length >= 4 && (token.startsWith(word) || word.startsWith(token))) return true;
+  // Only a truncated spoken token that is a PREFIX of a command word counts
+  // (e.g. "wieder" → "wiederholen"). We deliberately do NOT match when the
+  // spoken token merely *starts with* the command word, or a real answer like
+  // "revelation" would be read as the "reveal" command in spoken-recall mode.
+  if (word.length >= 4 && token.length >= 3 && word.startsWith(token)) return true;
   const thresh = word.length <= 6 ? 1 : 2;
   return lev(token, word) <= thresh;
 }

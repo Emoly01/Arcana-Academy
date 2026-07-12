@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import VoiceDrillMode from "./voice/VoiceDrillMode";
+import { useSpeech } from "./voice/useSpeech";
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
@@ -925,6 +926,26 @@ export default function App() {
   const [guessed, setGuessed] = useState(false);
   const resultShownAt = useRef(0);
 
+  // Read-aloud for the Study section — same English-voice TTS as Voice Drill.
+  const { speak: speakText, cancel: cancelSpeech, supported: ttsSupported } = useSpeech();
+  const [studySpeaking, setStudySpeaking] = useState(false);
+  const speakTokenRef = useRef(0);
+  const readCardAloud = useCallback((card) => {
+    if (!card) return;
+    const text = [
+      `${card.name}.`,
+      `Upright: ${card.upright.join(", ")}.`,
+      `Reversed: ${card.reversed.join(", ")}.`,
+      card.description || "",
+    ].join(" ");
+    const token = ++speakTokenRef.current;
+    setStudySpeaking(true);
+    speakText(text, { rate: 0.9 }).then(() => { if (speakTokenRef.current === token) setStudySpeaking(false); });
+  }, [speakText]);
+  const stopReading = useCallback(() => { speakTokenRef.current++; cancelSpeech(); setStudySpeaking(false); }, [cancelSpeech]);
+  // Stop any read-aloud when the open card or screen changes.
+  useEffect(() => { speakTokenRef.current++; cancelSpeech(); setStudySpeaking(false); }, [studyCard, screen, cancelSpeech]);
+
   useEffect(() => {
     if (cloudData && !synced) {
       setSrsData(cloudData.srsData || {});
@@ -1117,18 +1138,20 @@ export default function App() {
   }, [totalSessions, srsData, unlockedMinor, bestStreak, saveRef]);
 
   // ─── VOICE DRILL INTEGRATION ───
-  // Pull an SRS-ordered queue (due cards first, most overdue first), then fill
-  // with the rest so a session can run past the due pile. Wrap each card with an
-  // orientation the drill will read aloud (upright — the primary meanings).
-  const buildVoiceQueue = useCallback(() => {
-    const pool = [...availableCards];
+  // Pull an SRS-ordered queue for the chosen deck (due cards first, most overdue
+  // first), then fill with the rest so a session can run past the due pile. Each
+  // card is wrapped with the orientation the drill will read aloud, honouring the
+  // orientation filter ("both" alternates at random).
+  const buildVoiceQueue = useCallback((deck = "all", orientation = "both") => {
+    const pool = getQuizPool(deck);
     const now = Date.now();
     const due = pool.filter(c => getCardSRS(c.id).nextReview <= now)
       .sort((a, b) => getCardSRS(a.id).nextReview - getCardSRS(b.id).nextReview);
     const rest = shuffle(pool.filter(c => getCardSRS(c.id).nextReview > now));
     const ordered = (due.length ? [...due, ...rest] : shuffle(pool));
-    return ordered.map(card => ({ card, isUpright: true }));
-  }, [availableCards, getCardSRS]);
+    const isUp = () => orientation === "upright" ? true : orientation === "reversed" ? false : Math.random() < 0.5;
+    return ordered.map(card => ({ card, isUpright: isUp() }));
+  }, [getQuizPool, getCardSRS]);
 
   // Voice self-grade → the same write path as the visual quiz, tagged mode:"voice".
   // sicher/wackelig → "knew"; geraten → "lucky" (matches the quiz "I guessed" path).
@@ -1136,6 +1159,9 @@ export default function App() {
     const srsConfidence = correct ? (confidenceLevel === "geraten" ? "lucky" : "knew") : "wrong";
     recordAnswer(correct, cardId, srsConfidence, { mode: "voice", confidenceLevel });
   }, [recordAnswer]);
+
+  // Score a spoken recall against a card's meanings — reuses the free-recall scorer.
+  const scoreAnswer = useCallback((text, card, isUpright) => scoreTypedAnswer(text, card, isUpright), []);
 
   const handleUnlockMinor = useCallback(() => {
     setUnlockedMinor(true);
@@ -1736,6 +1762,10 @@ export default function App() {
             onGrade={handleVoiceGrade}
             onExit={() => setScreen("home")}
             modeStats={modeStats}
+            scoreAnswer={scoreAnswer}
+            unlockedMinor={unlockedMinor}
+            defaultDeck={quizDeck}
+            defaultOrientation={quizOrientation}
           />
         )}
 
@@ -2136,6 +2166,12 @@ export default function App() {
               {studyCard.id < 22 && <div className="arcana-glyph" style={{ fontSize: 48, marginBottom: 12, filter: "drop-shadow(0 0 12px rgba(201,168,76,0.3))" }}>{CARD_SYMBOLS[studyCard.id] || "✦"}</div>}
               <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: 22, fontWeight: 600, color: "#e8dcc8", marginBottom: 4 }}>{studyCard.name}</h3>
               <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.5)", marginBottom: 16, fontWeight: 300 }}>{studyCard.numeral && `${studyCard.numeral} · `}{studyCard.element}</div>
+              {ttsSupported && (
+                <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 20px", fontSize: 11, marginBottom: 16 }}
+                  onClick={() => (studySpeaking ? stopReading() : readCardAloud(studyCard))}>
+                  {studySpeaking ? "■ Stop reading" : "🔊 Read aloud"}
+                </button>
+              )}
               {studyCard.description && (
                 <div onClick={() => setShowDescription(!showDescription)} style={{ padding: 14, background: "rgba(201,168,76,0.04)", borderRadius: 10, cursor: "pointer", marginBottom: 16 }}>
                   <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", letterSpacing: 1, marginBottom: 6 }}>{showDescription ? "DESCRIPTION" : "TAP TO REVEAL DESCRIPTION"}</div>
