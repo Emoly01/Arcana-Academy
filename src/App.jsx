@@ -410,7 +410,47 @@ const CARD_CONNECTIONS = {
   21: [{ id: 0, reason: "End meets beginning" }, { id: 10, reason: "Completion of the cycle" }],
 };
 
+// ─── THE FOOL'S JOURNEY — GUIDED LEARNING PATH ───
+// Chapters unlock in order; a chapter is complete once every card in it
+// reaches mastery level 2+ ("Learning"). Progress is derived from srsData,
+// so existing users see their earned chapters already open.
+const LEARNING_PATH = [
+  { id: "ch1", icon: "🌅", title: "Setting Out", subtitle: "Innocence, will, and inner knowing", cardIds: [0, 1, 2, 3] },
+  { id: "ch2", icon: "🏛", title: "The Established World", subtitle: "Authority, tradition, choice, and drive", cardIds: [4, 5, 6, 7] },
+  { id: "ch3", icon: "🏮", title: "The Inner Path", subtitle: "Strength, solitude, cycles, and truth", cardIds: [8, 9, 10, 11] },
+  { id: "ch4", icon: "🌑", title: "The Descent", subtitle: "Surrender, endings, balance, and shadow", cardIds: [12, 13, 14, 15] },
+  { id: "ch5", icon: "🌠", title: "Through the Dark", subtitle: "Upheaval, hope, illusion, and joy", cardIds: [16, 17, 18, 19] },
+  { id: "ch6", icon: "🌍", title: "The Return", subtitle: "Reckoning and completion", cardIds: [20, 21] },
+];
+
+// ─── CARD IMAGERY (Rider–Waite–Smith deck, 1909 — public domain) ───
+const cardImageSrc = (id) => `${import.meta.env.BASE_URL}cards/${id}.jpg`;
+
+function CardImage({ card, isUpright = true, width = 110, hideName = false }) {
+  return (
+    <img
+      src={cardImageSrc(card.id)}
+      alt={hideName ? "Tarot card" : card.name}
+      loading="lazy"
+      style={{
+        width, borderRadius: 8, display: "block", margin: "0 auto",
+        border: "1px solid rgba(201,168,76,0.3)",
+        boxShadow: "0 6px 24px rgba(0,0,0,0.5)",
+        transform: isUpright ? "none" : "rotate(180deg)",
+      }}
+    />
+  );
+}
+
 // ─── SRS ───
+// Intervals are counted in days (SRS_VERSION 3), so mastered cards return
+// tomorrow / in 3 days / in a week instead of within the same sitting. A
+// failed card comes back after a short relearn delay so it can still be
+// re-drilled inside the current session.
+const SRS_VERSION = 3;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const RELEARN_MS = 10 * 60 * 1000;
+
 function getInitialSRS() {
   return { interval: 1, ease: 2.5, nextReview: 0, streak: 0, totalCorrect: 0, totalAttempts: 0 };
 }
@@ -422,19 +462,29 @@ function updateSRS(card, correct, confidence = "knew") {
   if (correct) {
     totalCorrect++; streak++;
     if (confidence === "lucky") {
-      interval = 2;
+      interval = 1;
       ease = Math.max(1.3, ease - 0.1);
     } else {
       if (streak === 1) interval = 1;
       else if (streak === 2) interval = 3;
-      else interval = Math.round(interval * ease);
+      else interval = Math.min(Math.round(interval * ease), 180);
       ease = Math.min(3.0, ease + 0.1);
     }
-  } else {
-    streak = 0; interval = 1;
-    ease = Math.max(1.3, ease - 0.2);
+    return { ...card, interval, ease, streak, totalCorrect, totalAttempts, nextReview: now + interval * DAY_MS };
   }
-  return { ...card, interval, ease, streak, totalCorrect, totalAttempts, nextReview: now + interval * 60000 };
+  streak = 0; interval = 1;
+  ease = Math.max(1.3, ease - 0.2);
+  return { ...card, interval, ease, streak, totalCorrect, totalAttempts, nextReview: now + RELEARN_MS };
+}
+
+// Pre-v3 data scheduled reviews in minutes; reinterpreting those intervals as
+// days would push cards weeks out, so reset the schedule but keep the history.
+function migrateSrsToDaily(srsData) {
+  const migrated = {};
+  for (const [id, s] of Object.entries(srsData)) {
+    migrated[id] = { ...s, interval: 1, nextReview: 0 };
+  }
+  return migrated;
 }
 
 // Aggregate per-mode stats so the visual quiz and Voice Drill can be compared
@@ -576,8 +626,13 @@ function pickDistractors(correct, pool, count = 3) {
 
   if (correct.id < 22) {
     // ── Major Arcana: cluster → sequence proximity → keyword overlap ──
-    const candidates = pool.filter(c => c.id !== correct.id && c.id < 22);
-    if (candidates.length <= count) return shuffle(candidates);
+    // Small pools (learning-path chapters, due reviews) borrow distractors
+    // from the full Major Arcana so questions keep four options.
+    let candidates = pool.filter(c => c.id !== correct.id && c.id < 22);
+    if (candidates.length <= count) {
+      const ids = new Set(candidates.map(c => c.id));
+      candidates = candidates.concat(MAJOR_ARCANA.filter(c => c.id !== correct.id && !ids.has(c.id)));
+    }
 
     const neighbors = MAJOR_NEIGHBORS[correct.id] || [];
     const scored = candidates.map(c => {
@@ -595,8 +650,11 @@ function pickDistractors(correct, pool, count = 3) {
 
   } else {
     // ── Minor Arcana: rank/suit axes ─────────────────────────────────
-    const candidates = pool.filter(c => c.id !== correct.id && !!c.suit);
-    if (candidates.length <= count) return shuffle(candidates);
+    let candidates = pool.filter(c => c.id !== correct.id && !!c.suit);
+    if (candidates.length <= count) {
+      const ids = new Set(candidates.map(c => c.id));
+      candidates = candidates.concat(ALL_MINOR.filter(c => c.id !== correct.id && !ids.has(c.id)));
+    }
 
     const correctRankIdx = MINOR_RANKS.indexOf(correct.name.split(' ')[0]);
     const correctSuit    = correct.suit;
@@ -692,6 +750,57 @@ function generateSuitLogicQuestion() {
   };
 }
 
+// ─── SYMBOLISM QUESTIONS (Major Arcana) ───
+// Many symbols recur across cards (pillars, crescents, "one foot in water"),
+// so "which card shows this?" distractors must exclude majors whose own
+// symbolism shares a keyword with the asked symbol.
+const SYMBOL_STOPWORDS = new Set(["the", "and", "with", "from", "often", "one", "two", "his", "her", "its", "their", "into", "around", "beneath", "behind", "showing", "figure", "figures"]);
+function symbolWords(text) {
+  return text.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(w => w.length > 3 && !SYMBOL_STOPWORDS.has(w));
+}
+
+function generateSymbolismQuestion(card) {
+  const entry = MAJOR_ARCANA_SYMBOLISM[String(card.id)];
+  const chosen = entry.symbols[Math.floor(Math.random() * entry.symbols.length)];
+
+  if (Math.random() < 0.5) {
+    // Symbol → card
+    const chosenWords = new Set(symbolWords(chosen.symbol));
+    const clashes = (c) => MAJOR_ARCANA_SYMBOLISM[String(c.id)].symbols.some(s => symbolWords(s.symbol).some(w => chosenWords.has(w)));
+    let candidates = MAJOR_ARCANA.filter(c => c.id !== card.id && !clashes(c));
+    if (candidates.length < 3) candidates = MAJOR_ARCANA.filter(c => c.id !== card.id);
+    const options = shuffle([
+      { id: card.id, text: card.name, correct: true },
+      ...shuffle(candidates).slice(0, 3).map(c => ({ id: c.id, text: c.name, correct: false })),
+    ]);
+    return {
+      type: "symbol-to-card",
+      prompt: `“${chosen.symbol}”`,
+      subtitle: "Which Major Arcana card features this?",
+      card, options, isUpright: true,
+      correctExplanation: `${card.name}\n${chosen.symbol}: ${chosen.meaning}`,
+    };
+  }
+
+  // Symbol → meaning on this card
+  const otherMeanings = [];
+  MAJOR_ARCANA.forEach(c => {
+    if (c.id === card.id) return;
+    MAJOR_ARCANA_SYMBOLISM[String(c.id)].symbols.forEach(s => otherMeanings.push(s.meaning));
+  });
+  const options = shuffle([
+    { id: "correct", text: chosen.meaning, correct: true },
+    ...shuffle(otherMeanings).slice(0, 3).map((m, i) => ({ id: `d${i}`, text: m, correct: false })),
+  ]);
+  return {
+    type: "symbol-meaning",
+    prompt: card.name,
+    subtitle: `What does “${chosen.symbol}” represent on this card?`,
+    card, options, isUpright: true,
+    correctExplanation: `${chosen.symbol}: ${chosen.meaning}`,
+  };
+}
+
 function generateQuestion(card, pool, mode, orientationFilter = "both") {
   const distractors = pickDistractors(card, pool);
 
@@ -708,11 +817,25 @@ function generateQuestion(card, pool, mode, orientationFilter = "both") {
 
   if (mode === "mixed") {
     const hasMinor = pool.some(c => c.suit);
-    const modes = ["card-to-meaning", "meaning-to-card", "upright-reversed", "free-type", "fill-gaps",
+    const modes = ["card-to-meaning", "meaning-to-card", "upright-reversed", "free-type", "fill-gaps", "image-to-card",
+      ...(card.id < 22 ? ["symbolism"] : []),
       ...(hasMinor ? ["suit-logic"] : [])];
     const picked = modes[Math.floor(Math.random() * modes.length)];
     if (picked === "suit-logic") return generateSuitLogicQuestion();
     return generateQuestion(card, pool, picked, orientationFilter);
+  }
+
+  if (mode === "symbolism") {
+    if (card.id >= 22) return generateQuestion(card, pool, "card-to-meaning", orientationFilter);
+    return generateSymbolismQuestion(card);
+  }
+
+  if (mode === "image-to-card") {
+    const options = shuffle([
+      { id: card.id, text: card.name, correct: true },
+      ...distractors.map(d => ({ id: d.id, text: d.name, correct: false })),
+    ]);
+    return { type: "image-to-card", prompt: "", subtitle: card.id < 22 ? "Major Arcana" : `Suit of ${card.suit}`, card, options, isUpright: true };
   }
 
   if (mode === "card-to-meaning") {
@@ -923,6 +1046,9 @@ export default function App() {
   // Deck filter for quizzes
   const [quizDeck, setQuizDeck] = useState("all");
   const [quizOrientation, setQuizOrientation] = useState("both");
+  // Explicit card pool override ({ label, cards }) — used by the due-review
+  // queue and Fool's Journey chapters; beats the deck filter while set.
+  const [customPool, setCustomPool] = useState(null);
   const [guessed, setGuessed] = useState(false);
   const resultShownAt = useRef(0);
 
@@ -948,7 +1074,8 @@ export default function App() {
 
   useEffect(() => {
     if (cloudData && !synced) {
-      setSrsData(cloudData.srsData || {});
+      const rawSrs = cloudData.srsData || {};
+      setSrsData((cloudData.srsVersion || 0) >= SRS_VERSION ? rawSrs : migrateSrsToDaily(rawSrs));
       setUnlockedMinor(cloudData.unlockedMinor || false);
       setBestStreak(cloudData.bestStreak || 0);
       setTotalSessions(cloudData.totalSessions || 0);
@@ -961,7 +1088,7 @@ export default function App() {
   }, [cloudData, synced]);
 
   const saveRef = useCallback((newSrs, newUnlocked, newBest, newSessions, newNotes) => {
-    save({ srsData: newSrs, unlockedMinor: newUnlocked, bestStreak: newBest, totalSessions: newSessions, personalNotes: newNotes || personalNotes, modeStats: modeStatsRef.current });
+    save({ srsData: newSrs, srsVersion: SRS_VERSION, unlockedMinor: newUnlocked, bestStreak: newBest, totalSessions: newSessions, personalNotes: newNotes || personalNotes, modeStats: modeStatsRef.current });
   }, [save, personalNotes]);
 
   useEffect(() => {
@@ -989,8 +1116,20 @@ export default function App() {
     return [...availableCards]; // "all"
   }, [availableCards]);
 
-  const startQuiz = useCallback((mode) => {
+  // Resolve the card pool for a question: a pool override (due review,
+  // learning-path chapter) beats the deck filter; symbolism needs majors.
+  const resolveQuizPool = useCallback((mode, poolOverride) => {
+    const base = poolOverride ? poolOverride.cards : getQuizPool(quizDeck);
+    if (mode === "symbolism") {
+      const majors = base.filter(c => c.id < 22);
+      return majors.length > 0 ? majors : [...MAJOR_ARCANA];
+    }
+    return base;
+  }, [getQuizPool, quizDeck]);
+
+  const startQuiz = useCallback((mode, poolOverride = null) => {
     setQuizMode(mode);
+    setCustomPool(poolOverride);
     setSessionCorrect(0); setSessionTotal(0); setCurrentStreak(0);
     setSelectedAnswer(null); setShowResult(false); setTypedInput(""); setTypeResult(null); setGuessed(false);
     if (mode === "suit-logic") {
@@ -998,7 +1137,7 @@ export default function App() {
       setScreen("quiz");
       return;
     }
-    const pool = getQuizPool(quizDeck);
+    const pool = resolveQuizPool(mode, poolOverride);
     const now = Date.now();
     const due = pool.filter(c => getCardSRS(c.id).nextReview <= now);
     const sorted = due.length > 0 ? shuffle(due) : shuffle(pool);
@@ -1006,7 +1145,7 @@ export default function App() {
     const q = generateQuestion(cardWithHits, pool, mode, quizOrientation);
     setCurrentQ(q);
     setScreen("quiz");
-  }, [getQuizPool, quizDeck, quizOrientation, getCardSRS, srsData]);
+  }, [resolveQuizPool, quizOrientation, getCardSRS, srsData]);
 
   const recordAnswer = useCallback((correct, cardId, confidence = "knew", meta = {}) => {
     const { mode = "quiz", confidenceLevel = null } = meta;
@@ -1032,13 +1171,13 @@ export default function App() {
       setCurrentQ(generateSuitLogicQuestion());
       return;
     }
-    const pool = getQuizPool(quizDeck);
+    const pool = resolveQuizPool(quizMode, customPool);
     const now = Date.now();
     const due = pool.filter(c => getCardSRS(c.id).nextReview <= now && c.id !== currentQ?.card?.id);
     const next = due.length > 0 ? due[Math.floor(Math.random() * due.length)] : pool[Math.floor(Math.random() * pool.length)];
     const nextWithHits = { ...next, _meaningHits: srsData[next.id]?.meaningHits || {} };
     setCurrentQ(generateQuestion(nextWithHits, pool, quizMode, quizOrientation));
-  }, [getQuizPool, quizDeck, quizOrientation, getCardSRS, currentQ, quizMode, srsData]);
+  }, [resolveQuizPool, customPool, quizOrientation, getCardSRS, currentQ, quizMode, srsData]);
 
   const handleAnswer = useCallback((option) => {
     if (showResult) return;
@@ -1196,6 +1335,38 @@ export default function App() {
     }),
   [availableCards, srsData]);
 
+  // ─── DUE REVIEW QUEUE ───
+  // Cards studied before whose day-based review date has arrived.
+  const dueCards = useMemo(() =>
+    availableCards.filter(c => {
+      const s = srsData[c.id];
+      return s && s.totalAttempts > 0 && s.nextReview <= Date.now();
+    }),
+  [availableCards, srsData]);
+
+  const startDueReview = useCallback(() => {
+    if (dueCards.length === 0) return;
+    startQuiz("mixed", { label: "DUE REVIEW", cards: dueCards });
+  }, [dueCards, startQuiz]);
+
+  // ─── FOOL'S JOURNEY PROGRESS ───
+  const journey = useMemo(() => {
+    let prevComplete = true;
+    return LEARNING_PATH.map(ch => {
+      const known = ch.cardIds.filter(id => { const s = srsData[id]; return s && getMasteryLevel(s).level >= 2; }).length;
+      const complete = known === ch.cardIds.length;
+      const unlocked = prevComplete;
+      prevComplete = complete;
+      return { ...ch, known, total: ch.cardIds.length, complete, unlocked };
+    });
+  }, [srsData]);
+  const journeyComplete = journey.every(ch => ch.complete);
+
+  const startChapterQuiz = useCallback((chapter) => {
+    const cards = MAJOR_ARCANA.filter(c => chapter.cardIds.includes(c.id));
+    startQuiz("mixed", { label: chapter.title.toUpperCase(), cards });
+  }, [startQuiz]);
+
   // ─── DAILY FOCUS ───
   const dailyFocus = useMemo(() => {
     // All possible focus combos
@@ -1249,6 +1420,7 @@ export default function App() {
   }, [srsData, unlockedMinor]);
 
   const startDailyFocus = useCallback(() => {
+    setCustomPool(null);
     setQuizDeck(dailyFocus.deck);
     setQuizOrientation(dailyFocus.orientation);
     // Small delay to let state update, then start
@@ -1562,17 +1734,9 @@ export default function App() {
                     </div>
 
                     <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                      {/* Card symbol */}
-                      <div style={{
-                        width: 56, height: 80, borderRadius: 10, flexShrink: 0,
-                        background: "linear-gradient(160deg, rgba(201,168,76,0.12), rgba(201,168,76,0.04))",
-                        border: "1px solid rgba(201,168,76,0.2)",
-                        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                        transform: isUp ? "none" : "rotate(180deg)",
-                      }}>
-                        <div className="arcana-glyph" style={{ fontSize: 28, filter: "drop-shadow(0 0 8px rgba(201,168,76,0.3))" }}>
-                          {cotd.id < 22 ? (CARD_SYMBOLS[cotd.id] || "✦") : "✦"}
-                        </div>
+                      {/* Card image */}
+                      <div style={{ flexShrink: 0 }}>
+                        <CardImage card={cotd} isUpright={isUp} width={56} />
                       </div>
                       {/* Card info */}
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -1629,6 +1793,27 @@ export default function App() {
               ))}
             </div>
 
+            {/* Due review queue */}
+            {dueCards.length > 0 && (
+              <div onClick={startDueReview} style={{
+                padding: "16px 20px", marginBottom: 16, cursor: "pointer", borderRadius: 14,
+                background: "linear-gradient(135deg, rgba(76,175,80,0.1), rgba(76,175,80,0.02))",
+                border: "1px solid rgba(76,175,80,0.3)",
+                display: "flex", alignItems: "center", gap: 14, transition: "all 0.2s ease",
+              }}>
+                <div style={{ fontSize: 22, flexShrink: 0 }}>⏳</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 14, color: "#e8dcc8", fontWeight: 500 }}>
+                    {dueCards.length} card{dueCards.length !== 1 ? "s" : ""} due for review
+                  </div>
+                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.5)", fontWeight: 300 }}>
+                    Clear the queue daily to keep memories fresh
+                  </div>
+                </div>
+                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "rgba(76,175,80,0.7)", letterSpacing: 1, flexShrink: 0 }}>REVIEW →</div>
+              </div>
+            )}
+
             {leeches.length > 0 && (
               <div onClick={() => { setStudyFilter("leeches"); setScreen("study"); }} style={{
                 padding: "12px 16px", marginBottom: 16, cursor: "pointer", borderRadius: 12,
@@ -1672,6 +1857,45 @@ export default function App() {
                 </div>
               </div>
             )}
+
+            {/* The Fool's Journey — guided learning path */}
+            <div style={{ marginBottom: 24 }}>
+              <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 14, letterSpacing: 2, color: "rgba(201,168,76,0.6)", marginBottom: 14, fontWeight: 500 }}>THE FOOL'S JOURNEY</h2>
+              {journeyComplete ? (
+                <div style={{ padding: "14px 18px", borderRadius: 12, background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.2)", textAlign: "center" }}>
+                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 13, color: "#c9a84c" }}>✦ Journey complete — all 22 Major Arcana learned ✦</div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {journey.map(ch => (
+                    <div key={ch.id} onClick={() => ch.unlocked && startChapterQuiz(ch)} style={{
+                      padding: "12px 16px", borderRadius: 12, display: "flex", alignItems: "center", gap: 12,
+                      background: ch.complete ? "rgba(76,175,80,0.05)" : "rgba(201,168,76,0.04)",
+                      border: `1px solid ${ch.complete ? "rgba(76,175,80,0.2)" : ch.unlocked ? "rgba(201,168,76,0.2)" : "rgba(201,168,76,0.08)"}`,
+                      cursor: ch.unlocked ? "pointer" : "default",
+                      opacity: ch.unlocked ? 1 : 0.45,
+                      transition: "all 0.2s ease",
+                    }}>
+                      <div style={{ fontSize: 20, flexShrink: 0, filter: ch.unlocked ? "none" : "grayscale(1)" }}>{ch.unlocked ? ch.icon : "🔒"}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 500, color: ch.unlocked ? "#e8dcc8" : "rgba(201,168,76,0.4)" }}>{ch.title}</div>
+                        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", fontWeight: 300 }}>{ch.subtitle}</div>
+                      </div>
+                      <div style={{ flexShrink: 0, textAlign: "right" }}>
+                        {ch.complete ? (
+                          <span style={{ fontFamily: "'Cinzel', serif", fontSize: 14, color: "rgba(76,175,80,0.7)" }}>✓</span>
+                        ) : ch.unlocked ? (
+                          <div>
+                            <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: "#c9a84c" }}>{ch.known}/{ch.total}</div>
+                            <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 9, color: "rgba(201,168,76,0.4)", letterSpacing: 1 }}>BEGIN →</div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div style={{ marginBottom: 12 }}>
               <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 14, letterSpacing: 2, color: "rgba(201,168,76,0.6)", marginBottom: 14, fontWeight: 500 }}>PRACTICE</h2>
@@ -1718,6 +1942,8 @@ export default function App() {
                 {[
                   { mode: "card-to-meaning", icon: "🃏", title: "Card → Meaning", desc: "See the card, pick its keywords" },
                   { mode: "meaning-to-card", icon: "🔮", title: "Meaning → Card", desc: "Read the meaning, name the card" },
+                  { mode: "image-to-card", icon: "🖼", title: "Image → Card", desc: "See the artwork, name the card" },
+                  { mode: "symbolism", icon: "🕯", title: "Symbolism", desc: "Decode the imagery of the Major Arcana" },
                   { mode: "upright-reversed", icon: "⚖", title: "Upright vs Reversed", desc: "Know the difference" },
                   { mode: "free-type", icon: "✍", title: "Free Recall", desc: "Type meanings from memory — no hints" },
                   { mode: "fill-gaps", icon: "🧩", title: "Fill the Gaps", desc: "We show what you know — type what you don't" },
@@ -1752,6 +1978,9 @@ export default function App() {
             <div style={{ marginTop: 10 }}>
               <button className="nav-btn nav-btn-ghost" style={{ width: "100%" }} onClick={() => { setScreen("reference"); setRefSearch(""); }}>🔍 Quick Reference</button>
             </div>
+            <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.25)", textAlign: "center", marginTop: 24, fontWeight: 300 }}>
+              Card imagery: Rider–Waite–Smith deck (1909), public domain
+            </div>
           </div>
         )}
 
@@ -1777,9 +2006,13 @@ export default function App() {
               <div style={{ padding: "4px 12px", borderRadius: 20, fontFamily: "'Cinzel', serif", fontSize: 12, letterSpacing: 1, background: currentStreak > 0 ? "rgba(201,168,76,0.12)" : "rgba(255,255,255,0.05)", color: currentStreak > 0 ? "#c9a84c" : "rgba(255,255,255,0.3)" }}>🔥 {currentStreak}</div>
               <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.5)" }}>{sessionCorrect}/{sessionTotal}</div>
             </div>
-            {(quizDeck !== "all" || quizOrientation !== "both") && (
+            {(customPool || quizDeck !== "all" || quizOrientation !== "both") && (
               <div style={{ textAlign: "center", marginBottom: 18, display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
-                {quizDeck !== "all" && (
+                {customPool ? (
+                  <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.3)", letterSpacing: 1, padding: "3px 10px", borderRadius: 10, background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.08)" }}>
+                    {customPool.label}
+                  </span>
+                ) : quizDeck !== "all" && (
                   <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.3)", letterSpacing: 1, padding: "3px 10px", borderRadius: 10, background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.08)" }}>
                     {quizDeck === "major" ? "MAJOR ARCANA" : quizDeck === "minor" ? "MINOR ARCANA" : quizDeck.toUpperCase()}
                   </span>
@@ -1803,15 +2036,27 @@ export default function App() {
                 {currentQ.type === "upright-reversed" && "Choose the correct meaning"}
                 {currentQ.type === "free-type" && "Free recall"}
                 {currentQ.type === "fill-gaps" && "Fill the gaps"}
+                {currentQ.type === "image-to-card" && "Which card is this?"}
+                {currentQ.type === "symbol-to-card" && "Symbolism · Which card shows this?"}
+                {currentQ.type === "symbol-meaning" && "Symbolism · What does it mean?"}
                 {currentQ.type === "suit-meaning" && "Suit & Number Logic · Suit theme"}
                 {currentQ.type === "rank-meaning" && "Suit & Number Logic · Rank theme"}
                 {currentQ.type === "derivation" && "Suit & Number Logic · Build the meaning"}
               </div>
 
-              {currentQ.card.id < 22 && currentQ.type !== "meaning-to-card" && (
-                <div className="arcana-glyph" style={{ fontSize: 40, marginBottom: 8, filter: "drop-shadow(0 0 8px rgba(201,168,76,0.3))" }}>
-                  {CARD_SYMBOLS[currentQ.card.id] || "✦"}
+              {/* Card artwork — hidden where it would give the answer away */}
+              {["card-to-meaning", "upright-reversed", "free-type", "fill-gaps", "symbol-meaning"].includes(currentQ.type) && (
+                <div style={{ marginBottom: 12 }}>
+                  <CardImage card={currentQ.card} isUpright={currentQ.isUpright !== false} width={110} />
                 </div>
+              )}
+              {currentQ.type === "image-to-card" && (
+                <div style={{ marginBottom: 12 }}>
+                  <CardImage card={currentQ.card} width={170} hideName />
+                </div>
+              )}
+              {currentQ.type === "symbol-to-card" && (
+                <div style={{ fontSize: 36, marginBottom: 8, filter: "drop-shadow(0 0 8px rgba(201,168,76,0.3))" }}>🕯</div>
               )}
 
               {currentQ.type === "suit-meaning" && (
@@ -1823,7 +2068,7 @@ export default function App() {
               {currentQ.type === "derivation" && (
                 <div style={{ fontSize: 32, marginBottom: 8, filter: `drop-shadow(0 0 10px ${currentQ.suitColor}55)`, color: currentQ.suitColor }}>♟</div>
               )}
-              {currentQ.type !== "fill-gaps" && (
+              {currentQ.type !== "fill-gaps" && currentQ.prompt && (
                 <div style={{ fontFamily: "'Cinzel', serif", fontSize: 22, fontWeight: 600, color: "#e8dcc8", marginBottom: 8, lineHeight: 1.5 }}>
                   {currentQ.prompt}
                 </div>
@@ -1873,7 +2118,7 @@ export default function App() {
                   <div style={{ fontFamily: "'Cinzel', serif", fontSize: 20, color: selectedAnswer?.correct ? "#4caf50" : "#dc3545", marginBottom: 8, fontWeight: 700, letterSpacing: 1 }}>
                     {selectedAnswer?.correct ? "✦ Correct!" : "✕ Not quite"}
                   </div>
-                  {(currentQ.type === "suit-meaning" || currentQ.type === "rank-meaning" || currentQ.type === "derivation") ? (
+                  {["suit-meaning", "rank-meaning", "derivation", "symbol-to-card", "symbol-meaning"].includes(currentQ.type) ? (
                     <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(232,220,200,0.7)", lineHeight: 1.8, fontWeight: 300, whiteSpace: "pre-line" }}>
                       {currentQ.correctExplanation}
                     </div>
@@ -2084,7 +2329,7 @@ export default function App() {
               </div>
             )}
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <button className="nav-btn nav-btn-primary" onClick={() => startQuiz(quizMode)}>Practice Again</button>
+              <button className="nav-btn nav-btn-primary" onClick={() => startQuiz(quizMode, customPool)}>Practice Again</button>
               <button className="nav-btn nav-btn-ghost" onClick={() => setScreen("home")}>← Home</button>
             </div>
           </div>
@@ -2163,7 +2408,9 @@ export default function App() {
           <div>
             <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 14px", fontSize: 11, marginBottom: 20 }} onClick={() => { setStudyCard(null); setEditingNote(false); }}>← Back to list</button>
             <div style={{ padding: 28, background: "linear-gradient(160deg, rgba(201,168,76,0.06), rgba(201,168,76,0.02))", border: "1px solid rgba(201,168,76,0.15)", borderRadius: 20, textAlign: "center", marginBottom: 24 }}>
-              {studyCard.id < 22 && <div className="arcana-glyph" style={{ fontSize: 48, marginBottom: 12, filter: "drop-shadow(0 0 12px rgba(201,168,76,0.3))" }}>{CARD_SYMBOLS[studyCard.id] || "✦"}</div>}
+              <div style={{ marginBottom: 14 }}>
+                <CardImage card={studyCard} width={150} />
+              </div>
               <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: 22, fontWeight: 600, color: "#e8dcc8", marginBottom: 4 }}>{studyCard.name}</h3>
               <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.5)", marginBottom: 16, fontWeight: 300 }}>{studyCard.numeral && `${studyCard.numeral} · `}{studyCard.element}</div>
               {ttsSupported && (
