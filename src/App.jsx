@@ -415,12 +415,18 @@ const CARD_CONNECTIONS = {
 // reaches mastery level 2+ ("Learning"). Progress is derived from srsData,
 // so existing users see their earned chapters already open.
 const LEARNING_PATH = [
-  { id: "ch1", icon: "🌅", title: "Setting Out", subtitle: "Innocence, will, and inner knowing", cardIds: [0, 1, 2, 3] },
-  { id: "ch2", icon: "🏛", title: "The Established World", subtitle: "Authority, tradition, choice, and drive", cardIds: [4, 5, 6, 7] },
-  { id: "ch3", icon: "🏮", title: "The Inner Path", subtitle: "Strength, solitude, cycles, and truth", cardIds: [8, 9, 10, 11] },
-  { id: "ch4", icon: "🌑", title: "The Descent", subtitle: "Surrender, endings, balance, and shadow", cardIds: [12, 13, 14, 15] },
-  { id: "ch5", icon: "🌠", title: "Through the Dark", subtitle: "Upheaval, hope, illusion, and joy", cardIds: [16, 17, 18, 19] },
-  { id: "ch6", icon: "🌍", title: "The Return", subtitle: "Reckoning and completion", cardIds: [20, 21] },
+  { id: "ch1", icon: "🌅", title: "Setting Out", subtitle: "Innocence, will, and inner knowing", cardIds: [0, 1, 2, 3],
+    story: "The Fool leaps into the unknown and meets the first teachers — the Magician's will, the High Priestess's intuition, and the Empress's nurturing abundance." },
+  { id: "ch2", icon: "🏛", title: "The Established World", subtitle: "Authority, tradition, choice, and drive", cardIds: [4, 5, 6, 7],
+    story: "The Fool enters society: the Emperor's order, the Hierophant's tradition, the Lovers' defining choice, and the Chariot's hard-won victory." },
+  { id: "ch3", icon: "🏮", title: "The Inner Path", subtitle: "Strength, solitude, cycles, and truth", cardIds: [8, 9, 10, 11],
+    story: "Outward success isn't enough. The Fool learns quiet Strength, follows the Hermit inward, watches the Wheel turn, and answers to Justice." },
+  { id: "ch4", icon: "🌑", title: "The Descent", subtitle: "Surrender, endings, balance, and shadow", cardIds: [12, 13, 14, 15],
+    story: "The hardest lessons: the Hanged Man's surrender, Death's transformation, Temperance's alchemy — and the Devil's chains, worn by choice." },
+  { id: "ch5", icon: "🌠", title: "Through the Dark", subtitle: "Upheaval, hope, illusion, and joy", cardIds: [16, 17, 18, 19],
+    story: "The Tower shatters what was false. The Star restores hope, the Moon tests the Fool with illusion, and the Sun finally breaks through." },
+  { id: "ch6", icon: "🌍", title: "The Return", subtitle: "Reckoning and completion", cardIds: [20, 21],
+    story: "Judgement sounds the trumpet to rise and account for the journey — and the World completes the circle, ready to begin again." },
 ];
 
 // ─── CARD IMAGERY (Rider–Waite–Smith deck, 1909 — public domain) ───
@@ -1860,7 +1866,11 @@ export default function App() {
 
             {/* The Fool's Journey — guided learning path */}
             <div style={{ marginBottom: 24 }}>
-              <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 14, letterSpacing: 2, color: "rgba(201,168,76,0.6)", marginBottom: 14, fontWeight: 500 }}>THE FOOL'S JOURNEY</h2>
+              <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 14, letterSpacing: 2, color: "rgba(201,168,76,0.6)", marginBottom: 8, fontWeight: 500 }}>THE FOOL'S JOURNEY</h2>
+              <p style={{ fontFamily: "'Crimson Text', serif", fontSize: 13, color: "rgba(232,220,200,0.55)", fontStyle: "italic", lineHeight: 1.6, margin: "0 0 14px" }}>
+                One story runs through the Major Arcana: the Fool — card 0 — sets out on a journey, and every card after is a stage of it.
+                Learn the tale chapter by chapter; each opens once the one before is learned.
+              </p>
               {journeyComplete ? (
                 <div style={{ padding: "14px 18px", borderRadius: 12, background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.2)", textAlign: "center" }}>
                   <div style={{ fontFamily: "'Cinzel', serif", fontSize: 13, color: "#c9a84c" }}>✦ Journey complete — all 22 Major Arcana learned ✦</div>
@@ -1879,7 +1889,18 @@ export default function App() {
                       <div style={{ fontSize: 20, flexShrink: 0, filter: ch.unlocked ? "none" : "grayscale(1)" }}>{ch.unlocked ? ch.icon : "🔒"}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 500, color: ch.unlocked ? "#e8dcc8" : "rgba(201,168,76,0.4)" }}>{ch.title}</div>
-                        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", fontWeight: 300 }}>{ch.subtitle}</div>
+                        {ch.unlocked ? (
+                          <>
+                            <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.5)", fontWeight: 400, letterSpacing: 0.5, marginTop: 2 }}>
+                              {ch.cardIds.map(id => MAJOR_ARCANA[id].name).join(" · ")}
+                            </div>
+                            <div style={{ fontFamily: "'Crimson Text', serif", fontSize: 12, color: "rgba(232,220,200,0.5)", fontStyle: "italic", lineHeight: 1.5, marginTop: 4 }}>
+                              {ch.story}
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", fontWeight: 300 }}>{ch.subtitle}</div>
+                        )}
                       </div>
                       <div style={{ flexShrink: 0, textAlign: "right" }}>
                         {ch.complete ? (
