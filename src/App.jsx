@@ -432,7 +432,29 @@ const LEARNING_PATH = [
 // ─── CARD IMAGERY (Rider–Waite–Smith deck, 1909 — public domain) ───
 const cardImageSrc = (id) => `${import.meta.env.BASE_URL}cards/${id}.jpg`;
 
-function CardImage({ card, isUpright = true, width = 110, hideName = false }) {
+const CARD_ASPECT = 1.757; // all bundled scans are 350x615
+
+function CardImage({ card, isUpright = true, width = 110, hideName = false, cropTitle = false }) {
+  if (cropTitle) {
+    // The RWS scans print the card's title and numeral on the face, which
+    // would give image-to-card questions away — show only the middle band.
+    const cropTop = 0.13, cropBottom = 0.15;
+    return (
+      <div style={{
+        width, height: Math.round(width * CARD_ASPECT * (1 - cropTop - cropBottom)),
+        overflow: "hidden", borderRadius: 8, margin: "0 auto",
+        border: "1px solid rgba(201,168,76,0.3)",
+        boxShadow: "0 6px 24px rgba(0,0,0,0.5)",
+      }}>
+        <img
+          src={cardImageSrc(card.id)}
+          alt="Tarot card"
+          loading="lazy"
+          style={{ width: "100%", display: "block", transform: `translateY(-${cropTop * 100}%)` }}
+        />
+      </div>
+    );
+  }
   return (
     <img
       src={cardImageSrc(card.id)}
@@ -841,7 +863,8 @@ function generateQuestion(card, pool, mode, orientationFilter = "both") {
       { id: card.id, text: card.name, correct: true },
       ...distractors.map(d => ({ id: d.id, text: d.name, correct: false })),
     ]);
-    return { type: "image-to-card", prompt: "", subtitle: card.id < 22 ? "Major Arcana" : `Suit of ${card.suit}`, card, options, isUpright: true };
+    // No subtitle: naming the suit or arcana would narrow the options.
+    return { type: "image-to-card", prompt: "", subtitle: "", card, options, isUpright: true };
   }
 
   if (mode === "card-to-meaning") {
@@ -2073,7 +2096,7 @@ export default function App() {
               )}
               {currentQ.type === "image-to-card" && (
                 <div style={{ marginBottom: 12 }}>
-                  <CardImage card={currentQ.card} width={170} hideName />
+                  <CardImage card={currentQ.card} width={170} hideName cropTitle />
                 </div>
               )}
               {currentQ.type === "symbol-to-card" && (
