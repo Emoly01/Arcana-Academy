@@ -863,7 +863,8 @@ function generateQuestion(card, pool, mode, orientationFilter = "both") {
       { id: card.id, text: card.name, correct: true },
       ...distractors.map(d => ({ id: d.id, text: d.name, correct: false })),
     ]);
-    return { type: "image-to-card", prompt: "", subtitle: card.id < 22 ? "Major Arcana" : `Suit of ${card.suit}`, card, options, isUpright: true };
+    // No subtitle: naming the suit or arcana would narrow the options.
+    return { type: "image-to-card", prompt: "", subtitle: "", card, options, isUpright: true };
   }
 
   if (mode === "card-to-meaning") {
