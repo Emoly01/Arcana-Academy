@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import VoiceDrillMode from "./voice/VoiceDrillMode";
 import { useSpeech } from "./voice/useSpeech";
+import { C, S, FONT_SERIF, FONT_SANS, roman, spell } from "./ui/theme";
+import { Icon, MoonIcon, Finial, CornerFlourish } from "./ui/icons";
+import {
+  AppHeader, TabBar, SectionHead, SectionNote, GiltPanel, GoldButton,
+  ChevronRow, ModeRow, StatPlaque, ProgressStrip,
+} from "./ui/primitives";
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
@@ -415,17 +421,17 @@ const CARD_CONNECTIONS = {
 // reaches mastery level 2+ ("Learning"). Progress is derived from srsData,
 // so existing users see their earned chapters already open.
 const LEARNING_PATH = [
-  { id: "ch1", icon: "🌅", title: "Setting Out", subtitle: "Innocence, will, and inner knowing", cardIds: [0, 1, 2, 3],
+  { id: "ch1", glyph: "sunrise", title: "Setting Out", subtitle: "Innocence, will, and inner knowing", cardIds: [0, 1, 2, 3],
     story: "The Fool leaps into the unknown and meets the first teachers — the Magician's will, the High Priestess's intuition, and the Empress's nurturing abundance." },
-  { id: "ch2", icon: "🏛", title: "The Established World", subtitle: "Authority, tradition, choice, and drive", cardIds: [4, 5, 6, 7],
+  { id: "ch2", glyph: "pillars", title: "The Established World", subtitle: "Authority, tradition, choice, and drive", cardIds: [4, 5, 6, 7],
     story: "The Fool enters society: the Emperor's order, the Hierophant's tradition, the Lovers' defining choice, and the Chariot's hard-won victory." },
-  { id: "ch3", icon: "🏮", title: "The Inner Path", subtitle: "Strength, solitude, cycles, and truth", cardIds: [8, 9, 10, 11],
+  { id: "ch3", glyph: "lantern", title: "The Inner Path", subtitle: "Strength, solitude, cycles, and truth", cardIds: [8, 9, 10, 11],
     story: "Outward success isn't enough. The Fool learns quiet Strength, follows the Hermit inward, watches the Wheel turn, and answers to Justice." },
-  { id: "ch4", icon: "🌑", title: "The Descent", subtitle: "Surrender, endings, balance, and shadow", cardIds: [12, 13, 14, 15],
+  { id: "ch4", glyph: "darkMoon", title: "The Descent", subtitle: "Surrender, endings, balance, and shadow", cardIds: [12, 13, 14, 15],
     story: "The hardest lessons: the Hanged Man's surrender, Death's transformation, Temperance's alchemy — and the Devil's chains, worn by choice." },
-  { id: "ch5", icon: "🌠", title: "Through the Dark", subtitle: "Upheaval, hope, illusion, and joy", cardIds: [16, 17, 18, 19],
+  { id: "ch5", glyph: "stars", title: "Through the Dark", subtitle: "Upheaval, hope, illusion, and joy", cardIds: [16, 17, 18, 19],
     story: "The Tower shatters what was false. The Star restores hope, the Moon tests the Fool with illusion, and the Sun finally breaks through." },
-  { id: "ch6", icon: "🌍", title: "The Return", subtitle: "Reckoning and completion", cardIds: [20, 21],
+  { id: "ch6", glyph: "globe", title: "The Return", subtitle: "Reckoning and completion", cardIds: [20, 21],
     story: "Judgement sounds the trumpet to rise and account for the journey — and the World completes the circle, ready to begin again." },
 ];
 
@@ -1041,6 +1047,9 @@ export default function App() {
   const { data: cloudData, loading: dataLoading, save } = useFirestoreSync(user?.uid);
 
   const [screen, setScreen] = useState("home");
+  // Persistent tabs: Today / Journey / Practice / Progress are always one tap
+  // away instead of buried at the end of a long scroll.
+  const [homeTab, setHomeTab] = useState("today");
   const [srsData, setSrsData] = useState({});
   const [unlockedMinor, setUnlockedMinor] = useState(false);
   const [currentStreak, setCurrentStreak] = useState(0);
@@ -1124,7 +1133,7 @@ export default function App() {
     setAnimateIn(false);
     const t = setTimeout(() => setAnimateIn(true), 50);
     return () => clearTimeout(t);
-  }, [screen, currentQ]);
+  }, [screen, homeTab, currentQ]);
 
   const availableCards = useMemo(() => unlockedMinor ? ALL_CARDS : MAJOR_ARCANA, [unlockedMinor]);
 
@@ -1305,6 +1314,20 @@ export default function App() {
     setScreen("results");
   }, [totalSessions, srsData, unlockedMinor, bestStreak, saveRef]);
 
+  // Tabs stay live during a quiz, so leaving mid-session still books the sitting
+  // the way "✕ End" would — answers themselves are already written per question.
+  const goTab = useCallback((tab) => {
+    if (screen === "quiz" && sessionTotal > 0) {
+      const ns = totalSessions + 1;
+      setTotalSessions(ns);
+      saveRef(srsData, unlockedMinor, bestStreak, ns);
+    }
+    setStudyCard(null);
+    setEditingNote(false);
+    setHomeTab(tab);
+    setScreen("home");
+  }, [screen, sessionTotal, totalSessions, srsData, unlockedMinor, bestStreak, saveRef]);
+
   // ─── VOICE DRILL INTEGRATION ───
   // Pull an SRS-ordered queue for the chosen deck (due cards first, most overdue
   // first), then fill with the rest so a session can run past the due pile. Each
@@ -1400,19 +1423,19 @@ export default function App() {
   const dailyFocus = useMemo(() => {
     // All possible focus combos
     const baseFocuses = [
-      { deck: "major", orientation: "upright", label: "Major Arcana — Upright", icon: "☉" },
-      { deck: "major", orientation: "reversed", label: "Major Arcana — Reversed", icon: "☾" },
+      { deck: "major", orientation: "upright", label: "Major Arcana — Upright", glyph: "sun" },
+      { deck: "major", orientation: "reversed", label: "Major Arcana — Reversed", glyph: "crescent" },
     ];
     const minorFocuses = unlockedMinor ? [
-      { deck: "wands", orientation: "upright", label: "Wands — Upright", icon: "🔥" },
-      { deck: "wands", orientation: "reversed", label: "Wands — Reversed", icon: "🔥" },
-      { deck: "cups", orientation: "upright", label: "Cups — Upright", icon: "💧" },
-      { deck: "cups", orientation: "reversed", label: "Cups — Reversed", icon: "💧" },
-      { deck: "swords", orientation: "upright", label: "Swords — Upright", icon: "🌬" },
-      { deck: "swords", orientation: "reversed", label: "Swords — Reversed", icon: "🌬" },
-      { deck: "pentacles", orientation: "upright", label: "Pentacles — Upright", icon: "🪙" },
-      { deck: "pentacles", orientation: "reversed", label: "Pentacles — Reversed", icon: "🪙" },
-      { deck: "minor", orientation: "both", label: "All Minor — Both", icon: "✦" },
+      { deck: "wands", orientation: "upright", label: "Wands — Upright", glyph: "flame" },
+      { deck: "wands", orientation: "reversed", label: "Wands — Reversed", glyph: "flame" },
+      { deck: "cups", orientation: "upright", label: "Cups — Upright", glyph: "droplet" },
+      { deck: "cups", orientation: "reversed", label: "Cups — Reversed", glyph: "droplet" },
+      { deck: "swords", orientation: "upright", label: "Swords — Upright", glyph: "wind" },
+      { deck: "swords", orientation: "reversed", label: "Swords — Reversed", glyph: "wind" },
+      { deck: "pentacles", orientation: "upright", label: "Pentacles — Upright", glyph: "coin" },
+      { deck: "pentacles", orientation: "reversed", label: "Pentacles — Reversed", glyph: "coin" },
+      { deck: "minor", orientation: "both", label: "All Minor — Both", glyph: "spark" },
     ] : [];
     const allFocuses = [...baseFocuses, ...minorFocuses];
 
@@ -1482,22 +1505,22 @@ export default function App() {
     const notesCount = Object.keys(personalNotes).length;
 
     const defs = [
-      { id: "first-steps", icon: "🌱", name: "First Steps", desc: "Complete your first session", unlocked: totalSessions >= 1 },
-      { id: "streak-7", icon: "🔥", name: "Kindling", desc: "Reach a streak of 7", unlocked: bestStreak >= 7 },
-      { id: "streak-30", icon: "🔥", name: "Bonfire", desc: "Reach a streak of 30", unlocked: bestStreak >= 30 },
-      { id: "streak-100", icon: "☄️", name: "Wildfire", desc: "Reach a streak of 100", unlocked: bestStreak >= 100 },
-      { id: "sessions-10", icon: "✦", name: "Devoted", desc: "Complete 10 sessions", unlocked: totalSessions >= 10 },
-      { id: "sessions-50", icon: "✦", name: "Dedicated", desc: "Complete 50 sessions", unlocked: totalSessions >= 50 },
-      { id: "seen-all-major", icon: "👁", name: "Acquainted", desc: "Practice every Major Arcana card", unlocked: MAJOR_ARCANA.every(c => srsData[c.id]?.totalAttempts > 0) },
-      { id: "major-master", icon: "☉", name: "Arcana Adept", desc: "Master all 22 Major Arcana", unlocked: majorAllMastered },
-      { id: "wands-master", icon: "🔥", name: "Wand Bearer", desc: "Master all of Wands", unlocked: unlockedMinor && suitMastered("Wands") },
-      { id: "cups-master", icon: "💧", name: "Cup Keeper", desc: "Master all of Cups", unlocked: unlockedMinor && suitMastered("Cups") },
-      { id: "swords-master", icon: "🌬", name: "Blade Dancer", desc: "Master all of Swords", unlocked: unlockedMinor && suitMastered("Swords") },
-      { id: "pentacles-master", icon: "🪙", name: "Coin Counter", desc: "Master all of Pentacles", unlocked: unlockedMinor && suitMastered("Pentacles") },
-      { id: "halfway", icon: "🌗", name: "Halfway There", desc: "Master half the deck", unlocked: masteredCount >= 39 },
-      { id: "full-deck", icon: "🌕", name: "The Whole Hoard", desc: "Master all 78 cards", unlocked: masteredCount >= 78 },
-      { id: "notes-5", icon: "📝", name: "Annotator", desc: "Write notes on 5 cards", unlocked: notesCount >= 5 },
-      { id: "scholar", icon: "📚", name: "Scholar", desc: "Write notes on 20 cards", unlocked: notesCount >= 20 },
+      { id: "first-steps", glyph: "seedling", name: "First Steps", desc: "Complete your first session", unlocked: totalSessions >= 1 },
+      { id: "streak-7", glyph: "flame", name: "Kindling", desc: "Reach a streak of 7", unlocked: bestStreak >= 7 },
+      { id: "streak-30", glyph: "flame", name: "Bonfire", desc: "Reach a streak of 30", unlocked: bestStreak >= 30 },
+      { id: "streak-100", glyph: "comet", name: "Wildfire", desc: "Reach a streak of 100", unlocked: bestStreak >= 100 },
+      { id: "sessions-10", glyph: "spark", name: "Devoted", desc: "Complete 10 sessions", unlocked: totalSessions >= 10 },
+      { id: "sessions-50", glyph: "spark", name: "Dedicated", desc: "Complete 50 sessions", unlocked: totalSessions >= 50 },
+      { id: "seen-all-major", glyph: "eye", name: "Acquainted", desc: "Practice every Major Arcana card", unlocked: MAJOR_ARCANA.every(c => srsData[c.id]?.totalAttempts > 0) },
+      { id: "major-master", glyph: "sun", name: "Arcana Adept", desc: "Master all 22 Major Arcana", unlocked: majorAllMastered },
+      { id: "wands-master", glyph: "flame", name: "Wand Bearer", desc: "Master all of Wands", unlocked: unlockedMinor && suitMastered("Wands") },
+      { id: "cups-master", glyph: "droplet", name: "Cup Keeper", desc: "Master all of Cups", unlocked: unlockedMinor && suitMastered("Cups") },
+      { id: "swords-master", glyph: "wind", name: "Blade Dancer", desc: "Master all of Swords", unlocked: unlockedMinor && suitMastered("Swords") },
+      { id: "pentacles-master", glyph: "coin", name: "Coin Counter", desc: "Master all of Pentacles", unlocked: unlockedMinor && suitMastered("Pentacles") },
+      { id: "halfway", glyph: "crescent", name: "Halfway There", desc: "Master half the deck", unlocked: masteredCount >= 39 },
+      { id: "full-deck", glyph: "star", name: "The Whole Hoard", desc: "Master all 78 cards", unlocked: masteredCount >= 78 },
+      { id: "notes-5", glyph: "note", name: "Annotator", desc: "Write notes on 5 cards", unlocked: notesCount >= 5 },
+      { id: "scholar", glyph: "books", name: "Scholar", desc: "Write notes on 20 cards", unlocked: notesCount >= 20 },
     ];
     return defs;
   }, [srsData, totalSessions, bestStreak, unlockedMinor, personalNotes]);
@@ -1617,8 +1640,8 @@ export default function App() {
   // ─── SIGN-IN SCREEN ───
   if (authLoading) {
     return (
-      <div style={{ minHeight: "100vh", background: "linear-gradient(170deg, #0a0a0f 0%, #121218 40%, #0d0d14 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#c9a84c", fontFamily: "'Cinzel', serif" }}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&display=swap');
+      <div style={{ minHeight: "100vh", background: "linear-gradient(170deg, #0a0a0f 0%, #121218 40%, #0d0d14 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#c9a84c", fontFamily: "'Cormorant Garamond', serif" }}>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Source+Sans+3:wght@300;400;500;600&display=swap');
           @keyframes breathe { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 1; transform: scale(1.1); } }`}</style>
         <div style={{ fontSize: 48, animation: "breathe 2s ease-in-out infinite", marginBottom: 20 }}>✧</div>
         <div style={{ letterSpacing: 3, fontSize: 14, opacity: 0.6 }}>SHUFFLING THE DECK...</div>
@@ -1628,32 +1651,32 @@ export default function App() {
 
   if (!user) {
     return (
-      <div style={{ minHeight: "100vh", background: "linear-gradient(170deg, #0a0a0f 0%, #121218 40%, #0d0d14 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#e8dcc8", fontFamily: "'Crimson Text', serif", padding: 20 }}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&family=Cinzel:wght@400;500;600;700&family=Raleway:wght@300;400;500&display=swap');
+      <div style={{ minHeight: "100vh", background: "linear-gradient(170deg, #0a0a0f 0%, #121218 40%, #0d0d14 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#e8dcc8", fontFamily: "'Cormorant Garamond', serif", padding: 20 }}>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Source+Sans+3:wght@300;400;500;600&display=swap');
           @keyframes shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
           @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }`}</style>
         <div style={{ fontSize: 56, marginBottom: 16, animation: "float 3s ease-in-out infinite", filter: "drop-shadow(0 0 16px rgba(201,168,76,0.3))" }}>✧</div>
         <h1 style={{
-          fontFamily: "'Cinzel', serif", fontSize: 32, fontWeight: 500, letterSpacing: 3, marginBottom: 8,
+          fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 500, letterSpacing: 3, marginBottom: 8,
           background: "linear-gradient(135deg, #c9a84c, #e8dcc8, #c9a84c)", backgroundSize: "200%",
           WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", animation: "shimmer 4s ease-in-out infinite",
         }}>ARCANA ACADEMY</h1>
-        <p style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.5)", letterSpacing: 2, fontWeight: 300, marginBottom: 40 }}>
+        <p style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.5)", letterSpacing: 2, fontWeight: 300, marginBottom: 40 }}>
           LEARN THE LANGUAGE OF THE CARDS
         </p>
         <button onClick={handleGoogleSignIn} style={{
-          padding: "14px 32px", borderRadius: 12, fontFamily: "'Cinzel', serif", fontSize: 14, fontWeight: 500,
+          padding: "14px 32px", borderRadius: 12, fontFamily: "'Cormorant Garamond', serif", fontSize: 14, fontWeight: 500,
           letterSpacing: 1, cursor: "pointer", transition: "all 0.3s ease", textTransform: "uppercase",
           background: "linear-gradient(135deg, rgba(201,168,76,0.25), rgba(201,168,76,0.1))",
           border: "1px solid rgba(201,168,76,0.4)", color: "#c9a84c",
         }}>
           ✦ Sign in with Google ✦
         </button>
-        <p style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.3)", marginTop: 16, fontWeight: 300, textAlign: "center", maxWidth: 280 }}>
+        <p style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.3)", marginTop: 16, fontWeight: 300, textAlign: "center", maxWidth: 280 }}>
           Sign in to sync your progress across all your devices
         </p>
         {authError && (
-          <p style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(220,53,69,0.7)", marginTop: 12 }}>{authError}</p>
+          <p style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 12, color: "rgba(220,53,69,0.7)", marginTop: 12 }}>{authError}</p>
         )}
       </div>
     );
@@ -1661,8 +1684,8 @@ export default function App() {
 
   if (dataLoading || !synced) {
     return (
-      <div style={{ minHeight: "100vh", background: "linear-gradient(170deg, #0a0a0f 0%, #121218 40%, #0d0d14 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#c9a84c", fontFamily: "'Cinzel', serif" }}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&display=swap');
+      <div style={{ minHeight: "100vh", background: "linear-gradient(170deg, #0a0a0f 0%, #121218 40%, #0d0d14 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#c9a84c", fontFamily: "'Cormorant Garamond', serif" }}>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Source+Sans+3:wght@300;400;500;600&display=swap');
           @keyframes breathe { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 1; transform: scale(1.1); } }`}</style>
         <div style={{ fontSize: 48, animation: "breathe 2s ease-in-out infinite", marginBottom: 20 }}>✧</div>
         <div style={{ letterSpacing: 3, fontSize: 14, opacity: 0.6 }}>SHUFFLING THE DECK...</div>
@@ -1670,8 +1693,57 @@ export default function App() {
     );
   }
 
+  // ─── DERIVED VIEW DATA ───
+  const practiceModes = [
+    { mode: "card-to-meaning", glyph: "cardFace", title: "Card → Meaning", desc: "See the card, name its keywords" },
+    { mode: "meaning-to-card", glyph: "orb", title: "Meaning → Card", desc: "Read the meaning, name the card" },
+    { mode: "image-to-card", glyph: "frame", title: "Image → Card", desc: "See the artwork, name the card" },
+    { mode: "symbolism", glyph: "temple", title: "Symbolism", desc: "Decode the Major Arcana imagery" },
+    { mode: "upright-reversed", glyph: "scales", title: "Upright vs Reversed", desc: "Know the difference" },
+    { mode: "free-type", glyph: "quill", title: "Free Recall", desc: "Type meanings from memory — no hints" },
+    { mode: "fill-gaps", glyph: "puzzle", title: "Fill the Gaps", desc: "We show what you know — type what you don't" },
+    ...(unlockedMinor ? [{ mode: "suit-logic", glyph: "pawn", title: "Suit & Number Logic", desc: "Derive Minor Arcana meanings" }] : []),
+    { mode: "mixed", glyph: "crescent", title: "Mixed Practice", desc: "All modes, spaced repetition" },
+  ];
+
+  const deckFilters = [
+    { key: "all", label: unlockedMinor ? "All 78" : "All" },
+    { key: "major", label: "Major Arcana" },
+    ...(unlockedMinor ? [
+      { key: "minor", label: "All Minor" },
+      { key: "wands", label: "Wands", glyph: "flame" },
+      { key: "cups", label: "Cups", glyph: "droplet" },
+      { key: "swords", label: "Swords", glyph: "wind" },
+      { key: "pentacles", label: "Pentacles", glyph: "coin" },
+    ] : []),
+  ];
+
+  const currentChapter = journey.find(ch => ch.unlocked && !ch.complete) || journey[journey.length - 1];
+  const chapterNo = journey.indexOf(currentChapter) + 1;
+  const chaptersDone = journey.filter(ch => ch.complete).length;
+
+  // Roughly twelve seconds a card — enough to make the queue feel finite.
+  const dueMinutes = Math.max(1, Math.round(dueCards.length * 0.2));
+  // The ring reads as "how much of what you've learned is still fresh".
+  const freshRatio = stats.attempted > 0
+    ? Math.max(0, Math.min(1, (stats.attempted - dueCards.length) / stats.attempted))
+    : 0;
+
+  const activeTab = screen === "home" ? homeTab
+    : (screen === "study" || screen === "reference") ? "practice"
+    : null;
+  const showChrome = screen !== "voice";
+  const linkBtn = {
+    background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer",
+    color: C.goldSoft, borderBottom: `1px solid ${C.frameMid}`,
+  };
+
   return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(170deg, #0a0a0f 0%, #121218 40%, #0d0d14 100%)", color: "#e8dcc8", fontFamily: "'Crimson Text', 'Georgia', serif", position: "relative" }}>
+    <div style={{
+      minHeight: "100vh", color: C.text, fontFamily: FONT_SANS, position: "relative",
+      background: `radial-gradient(1000px 700px at 50% -8%, #1A1520 0%, #0B0910 45%, ${C.ink} 100%)`,
+      backgroundAttachment: "fixed",
+    }}>
       <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", overflow: "hidden", zIndex: 0 }}>
         {[...Array(12)].map((_, i) => (
           <div key={i} style={{ position: "absolute", width: `${2 + Math.random() * 3}px`, height: `${2 + Math.random() * 3}px`, background: "radial-gradient(circle, rgba(201,168,76,0.4), transparent)", borderRadius: "50%", left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%`, animation: `float ${8 + Math.random() * 12}s ease-in-out infinite`, animationDelay: `${Math.random() * 5}s` }} />
@@ -1679,7 +1751,7 @@ export default function App() {
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&family=Cinzel:wght@400;500;600;700&family=Raleway:wght@300;400;500&family=Noto+Sans+Symbols+2&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Source+Sans+3:wght@300;400;500;600&family=Noto+Sans+Symbols+2&display=swap');
         .arcana-glyph { font-family: 'Noto Sans Symbols 2', sans-serif; color: #c9a84c; }
         @keyframes float { 0%, 100% { transform: translateY(0) translateX(0); opacity: 0.3; } 33% { transform: translateY(-30px) translateX(10px); opacity: 0.6; } 66% { transform: translateY(-15px) translateX(-10px); opacity: 0.2; } }
         @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
@@ -1688,7 +1760,7 @@ export default function App() {
         @keyframes cardReveal { from { opacity: 0; transform: rotateY(10deg) scale(0.95); } to { opacity: 1; transform: rotateY(0) scale(1); } }
         @keyframes correctPulse { 0% { box-shadow: 0 0 0 0 rgba(76,175,80,0.5); } 70% { box-shadow: 0 0 25px 10px rgba(76,175,80,0); } 100% { box-shadow: 0 0 0 0 rgba(76,175,80,0); } }
         @keyframes wrongShake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-8px); } 40% { transform: translateX(8px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
-        .option-btn { width: 100%; padding: 14px 18px; background: rgba(201,168,76,0.06); border: 1px solid rgba(201,168,76,0.15); border-radius: 12px; color: #e8dcc8; font-family: 'Raleway', sans-serif; font-size: 14px; font-weight: 400; text-align: left; cursor: pointer; transition: all 0.25s ease; line-height: 1.5; }
+        .option-btn { width: 100%; padding: 14px 18px; background: rgba(201,168,76,0.06); border: 1px solid rgba(201,168,76,0.15); border-radius: 12px; color: #e8dcc8; font-family: 'Source Sans 3', sans-serif; font-size: 14px; font-weight: 400; text-align: left; cursor: pointer; transition: all 0.25s ease; line-height: 1.5; }
         .option-btn:hover:not(:disabled) { background: rgba(201,168,76,0.12); border-color: rgba(201,168,76,0.4); transform: translateX(4px); }
         .option-btn.correct { background: rgba(76,175,80,0.15); border-color: rgba(76,175,80,0.5); animation: correctPulse 0.6s ease-out; }
         .option-btn.wrong { background: rgba(220,53,69,0.15); border-color: rgba(220,53,69,0.5); animation: wrongShake 0.4s ease; }
@@ -1696,110 +1768,193 @@ export default function App() {
         @media (hover: hover) and (pointer: fine) { .kbd-hint { display: inline; } }
         @keyframes masteredGlow { 0%, 100% { box-shadow: 0 0 4px rgba(201,168,76,0.2); } 50% { box-shadow: 0 0 10px rgba(201,168,76,0.4); } }
         .mastered-tile { animation: masteredGlow 3s ease-in-out infinite; }
-        .nav-btn { padding: 12px 28px; border-radius: 10px; font-family: 'Cinzel', serif; font-size: 13px; font-weight: 500; letter-spacing: 1px; cursor: pointer; transition: all 0.3s ease; text-transform: uppercase; }
-        .nav-btn-primary { background: linear-gradient(135deg, rgba(201,168,76,0.25), rgba(201,168,76,0.1)); border: 1px solid rgba(201,168,76,0.4); color: #c9a84c; }
-        .nav-btn-primary:hover { background: linear-gradient(135deg, rgba(201,168,76,0.35), rgba(201,168,76,0.15)); box-shadow: 0 4px 20px rgba(201,168,76,0.2); transform: translateY(-2px); }
-        .nav-btn-ghost { background: transparent; border: 1px solid rgba(201,168,76,0.2); color: rgba(201,168,76,0.7); }
-        .nav-btn-ghost:hover { border-color: rgba(201,168,76,0.4); color: #c9a84c; }
+        .nav-btn { padding: 12px 28px; border-radius: 12px; font-family: 'Source Sans 3', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: .14em; cursor: pointer; transition: all 0.3s ease; text-transform: uppercase; }
+        .nav-btn-primary { background: linear-gradient(180deg,#E3C67F 0%,#C29B47 100%); border: 1px solid #E9D49B; color: #1B1408; box-shadow: 0 6px 20px rgba(201,163,78,.22); }
+        .nav-btn-primary:hover { background: linear-gradient(180deg,#F0D79A 0%,#D0A954 100%); box-shadow: 0 8px 26px rgba(201,163,78,.3); transform: translateY(-1px); }
+        .nav-btn-ghost { background: linear-gradient(180deg,#141020 0%,#0E0B14 100%); border: 1px solid #2A2318; color: #B99F6C; }
+        .nav-btn-ghost:hover { border-color: #7A5F2C; color: #EFDFB2; }
         .mode-card { padding: 20px; background: rgba(201,168,76,0.04); border: 1px solid rgba(201,168,76,0.12); border-radius: 16px; cursor: pointer; transition: all 0.3s ease; }
         .mode-card:hover { background: rgba(201,168,76,0.1); border-color: rgba(201,168,76,0.35); transform: translateY(-3px); box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
         .study-card { padding: 14px 16px; background: rgba(201,168,76,0.04); border: 1px solid rgba(201,168,76,0.1); border-radius: 12px; cursor: pointer; transition: all 0.25s ease; display: flex; align-items: center; gap: 12px; }
         .study-card:hover { background: rgba(201,168,76,0.1); border-color: rgba(201,168,76,0.3); transform: translateX(4px); }
-        .filter-btn { padding: 6px 14px; border-radius: 20px; font-family: 'Raleway', sans-serif; font-size: 12px; font-weight: 400; cursor: pointer; transition: all 0.2s ease; border: 1px solid rgba(201,168,76,0.15); background: transparent; color: rgba(201,168,76,0.6); white-space: nowrap; }
-        .filter-btn.active { background: rgba(201,168,76,0.15); border-color: rgba(201,168,76,0.4); color: #c9a84c; }
-        .type-input { width: 100%; padding: 14px 16px; background: rgba(201,168,76,0.04); border: 1px solid rgba(201,168,76,0.2); border-radius: 12px; color: #e8dcc8; font-family: 'Raleway', sans-serif; font-size: 14px; font-weight: 400; resize: vertical; min-height: 80px; outline: none; transition: border-color 0.2s; }
+        .filter-btn { display: inline-flex; align-items: center; padding: 7px 14px; border-radius: 20px; font-family: 'Source Sans 3', sans-serif; font-size: 12.5px; font-weight: 400; cursor: pointer; transition: all 0.2s ease; border: 1px solid #2A2318; background: linear-gradient(180deg,#141020 0%,#0E0B14 100%); color: #8A7A56; white-space: nowrap; }
+        .filter-btn:hover { border-color: #4A3A1C; color: #B99F6C; }
+        .filter-btn.active { background: linear-gradient(180deg,#241B12 0%,#120F18 100%); border-color: #7A5F2C; color: #EFDFB2; }
+
+        /* ─── SHELL: compact header, scrolling middle, persistent tabs ─── */
+        .aa-shell { position: relative; z-index: 1; max-width: 560px; margin: 0 auto; }
+        .aa-frame { display: flex; flex-direction: column; min-height: 100vh; min-width: 0; }
+        .aa-header { position: sticky; top: 0; z-index: 30; }
+        .aa-main { flex: 1; padding: 18px 18px calc(94px + env(safe-area-inset-bottom, 0px)); }
+        .aa-tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; }
+        .aa-rail { display: none; }
+        @media (max-width: 379px) { .moon-label { display: none; } }
+        @media (min-width: 900px) {
+          .aa-shell { max-width: 1000px; display: flex; gap: 28px; align-items: flex-start; padding: 0 24px; }
+          .aa-rail { display: block; position: sticky; top: 28px; flex: 0 0 200px; width: 200px; padding-top: 28px; }
+          .aa-tabbar { display: none; }
+          .aa-frame { flex: 1; max-width: 760px; }
+          .aa-main { padding: 22px 22px 64px; }
+        }
+
+        /* ─── Rows: gilt panels that answer to the touch ─── */
+        .mode-row, .quiet-row { transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease; -webkit-tap-highlight-color: transparent; }
+        .mode-row:hover, .quiet-row:hover { border-color: #7A5F2C; }
+        .mode-row:hover { transform: translateX(3px); }
+        .gilt-cta { transition: filter 0.2s ease, box-shadow 0.2s ease; }
+        .gilt-cta:hover:not(:disabled) { filter: brightness(1.07); box-shadow: 0 8px 26px rgba(201,163,78,.3); }
+        .gilt-cta:active:not(:disabled) { filter: brightness(0.97); }
+        .type-input { width: 100%; padding: 14px 16px; background: rgba(201,168,76,0.04); border: 1px solid rgba(201,168,76,0.2); border-radius: 12px; color: #e8dcc8; font-family: 'Source Sans 3', sans-serif; font-size: 14px; font-weight: 400; resize: vertical; min-height: 80px; outline: none; transition: border-color 0.2s; }
         .type-input:focus { border-color: rgba(201,168,76,0.5); }
         .type-input::placeholder { color: rgba(201,168,76,0.25); }
         * { box-sizing: border-box; }
         ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.2); border-radius: 3px; }
-        body { margin: 0; background: #0a0a0f; }
+        body { margin: 0; background: #07060A; }
       `}</style>
 
-      <div style={{
-        position: "relative", zIndex: 1, maxWidth: 520, margin: "0 auto", padding: "20px 16px", minHeight: "100vh",
-        opacity: animateIn ? 1 : 0, transform: animateIn ? "translateY(0)" : "translateY(15px)", transition: "all 0.4s ease",
-      }}>
+      <div className="aa-shell">
+        {showChrome && <TabBar variant="rail" active={activeTab} onSelect={goTab} />}
+        <div className="aa-frame">
+          {showChrome && (
+            <AppHeader
+              moonPhase={moonPhase}
+              userName={user.displayName?.split(" ")[0] || "Witch"}
+              onSignOut={handleSignOut}
+            />
+          )}
+          <div className="aa-main" style={{
+            opacity: animateIn ? 1 : 0, transform: animateIn ? "translateY(0)" : "translateY(15px)",
+            transition: "all 0.4s ease",
+          }}>
 
-        {/* ═══ HOME ═══ */}
-        {screen === "home" && (
-          <div>
-            <div style={{ textAlign: "center", marginBottom: 28, paddingTop: 20 }}>
-              <div style={{ fontSize: 42, marginBottom: 8, filter: "drop-shadow(0 0 12px rgba(201,168,76,0.3))" }}>✧</div>
-              <h1 style={{
-                fontFamily: "'Cinzel', serif", fontSize: 28, fontWeight: 500, letterSpacing: 3,
-                background: "linear-gradient(135deg, #c9a84c, #e8dcc8, #c9a84c)", backgroundSize: "200%",
-                WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", animation: "shimmer 4s ease-in-out infinite", marginBottom: 6,
-              }}>ARCANA ACADEMY</h1>
-              <p style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.5)", letterSpacing: 2, fontWeight: 300 }}>
-                LEARN THE LANGUAGE OF THE CARDS
-              </p>
-              <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(76,175,80,0.4)", letterSpacing: 1, marginTop: 8, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                <span>● SYNCED — {user.displayName?.split(" ")[0] || "Witch"}</span>
-                <span onClick={handleSignOut} style={{ cursor: "pointer", color: "rgba(201,168,76,0.3)", borderBottom: "1px solid rgba(201,168,76,0.15)" }}>sign out</span>
-              </div>
+        {/* ═══ TODAY ═══ */}
+        {screen === "home" && homeTab === "today" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+            {/* One primary action: the review queue is the hero. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <SectionHead title="Today" trailing={bestStreak > 0 ? (
+                <SectionNote>
+                  <Icon name="flame" size={11} color={C.gold} stroke={1.6} />
+                  {roman(bestStreak)} STREAK
+                </SectionNote>
+              ) : null} />
+
+              <GiltPanel inner={{ padding: "22px 20px 20px", gap: 16 }}>
+                <CornerFlourish side="left" />
+                <CornerFlourish side="right" />
+
+                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                  <div style={{ position: "relative", flex: "0 0 auto", width: 64, height: 64, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="64" height="64" viewBox="0 0 64 64" style={{ position: "absolute", inset: 0 }} aria-hidden="true">
+                      <circle cx="32" cy="32" r="28" fill="none" stroke={C.ruleWarm} strokeWidth="3" />
+                      <circle cx="32" cy="32" r="28" fill="none" stroke={C.gold} strokeWidth="3" strokeLinecap="round"
+                        strokeDasharray="176" strokeDashoffset={176 * (1 - freshRatio)} transform="rotate(-90 32 32)"
+                        style={{ transition: "stroke-dashoffset 0.6s ease" }} />
+                      <circle cx="32" cy="32" r="21" fill="none" stroke={C.ruleBright} strokeWidth=".8" strokeDasharray="2 4" />
+                    </svg>
+                    <span style={{ fontFamily: FONT_SERIF, fontSize: 26, fontWeight: 600, color: C.goldPale }}>{dueCards.length}</span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 0 }}>
+                    <div style={{ fontFamily: FONT_SERIF, fontSize: 29, lineHeight: 1, color: C.goldPale }}>
+                      {dueCards.length > 0 ? "Cards due" : stats.attempted > 0 ? "Queue clear" : "Begin here"}
+                    </div>
+                    <div style={{ fontFamily: FONT_SANS, fontSize: 13.5, lineHeight: 1.5, color: C.textDim }}>
+                      {dueCards.length > 0 ? (
+                        <>About {spell(dueMinutes)} minute{dueMinutes === 1 ? "" : "s"} — keeps <span style={{ color: C.goldSoft }}>{stats.attempted} memories</span> from fading</>
+                      ) : stats.attempted > 0 ? (
+                        <>Nothing is fading today. Practice anyway to get ahead of the curve.</>
+                      ) : (
+                        <>Nothing studied yet — your first sitting sets the schedule.</>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <GoldButton onClick={dueCards.length > 0 ? startDueReview : startDailyFocus}>
+                  {dueCards.length > 0 ? "Begin the review" : "Begin a sitting"}
+                </GoldButton>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 9, justifyContent: "center", flexWrap: "wrap" }}>
+                  <svg width="34" height="6" viewBox="0 0 34 6" aria-hidden="true">
+                    <path d="M0 3h12M22 3h12" stroke={C.ruleBright} strokeWidth="1" />
+                    <circle cx="17" cy="3" r="1.8" fill={C.frameWarm} />
+                  </svg>
+                  <span style={{ fontFamily: FONT_SANS, fontSize: 13, color: C.goldDim }}>
+                    {dueCards.length > 0 && dailyFocus ? (
+                      <>or resume <button style={linkBtn} onClick={startDailyFocus}>{dailyFocus.label}</button></>
+                    ) : (
+                      <>or walk <button style={linkBtn} onClick={() => goTab("journey")}>the Fool's Journey</button></>
+                    )}
+                  </span>
+                </div>
+              </GiltPanel>
             </div>
 
-            {/* Card of the Day */}
+            {/* Card of the day — art at full height, not a thumbnail. */}
             {(() => {
               const cotd = cardOfTheDay.card;
               const isUp = cardOfTheDay.isUpright;
               const meanings = isUp ? cotd.upright : cotd.reversed;
+              const sealBg = isUp ? C.sealUpBg : C.sealRevBg;
+              const sealLine = isUp ? C.sealUpLine : C.sealRevLine;
+              const sealText = isUp ? C.sealUpText : C.sealRevText;
               return (
-                <div
-                  onClick={() => setCotdExpanded(!cotdExpanded)}
-                  style={{
-                    marginBottom: 24, borderRadius: 18, cursor: "pointer", overflow: "hidden",
-                    background: `linear-gradient(160deg, ${moonPhase.glow}, rgba(201,168,76,0.03))`,
-                    border: "1px solid rgba(201,168,76,0.2)",
-                    transition: "all 0.3s ease",
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <SectionHead title="Card of the day" />
+                  <div style={{
+                    display: "flex", flexDirection: "column", gap: 16, padding: 16, borderRadius: 20,
+                    background: `linear-gradient(160deg, ${moonPhase.glow}, rgba(0,0,0,0)), ${S.panel}`,
+                    border: `1px solid ${C.ruleGold}`,
                   }}>
-                  <div style={{ padding: "18px 20px" }}>
-                    {/* Moon phase line */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                      <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.4)", letterSpacing: 2 }}>CARD OF THE DAY</span>
-                      <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.5)", display: "flex", alignItems: "center", gap: 5 }}>
-                        {moonPhase.icon} {moonPhase.name}
-                      </span>
-                    </div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                      {/* Card image */}
-                      <div style={{ flexShrink: 0 }}>
-                        <CardImage card={cotd} isUpright={isUp} width={56} />
+                    <div style={{ display: "flex", gap: 16 }}>
+                      <div style={{ flex: "0 0 148px", maxWidth: "42%", borderRadius: 10, padding: 3, background: S.cardMat, alignSelf: "flex-start" }}>
+                        <img
+                          src={cardImageSrc(cotd.id)} alt={cotd.name} loading="lazy"
+                          style={{ width: "100%", display: "block", borderRadius: 8, transform: isUp ? "none" : "rotate(180deg)" }}
+                        />
                       </div>
-                      {/* Card info */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 18, fontWeight: 600, color: "#e8dcc8", marginBottom: 2 }}>
+                      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 9 }}>
+                        <span style={{ fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: ".2em", color: C.goldDim }}>
+                          {cotd.numeral || (cotd.suit || "").toUpperCase()}
+                        </span>
+                        <div style={{ fontFamily: FONT_SERIF, fontSize: cotd.name.length > 15 ? 23 : 29, lineHeight: 1.05, color: C.goldPale }}>
                           {cotd.name}
                         </div>
                         <div style={{
-                          fontFamily: "'Raleway', sans-serif", fontSize: 11, fontWeight: 400, marginBottom: 6,
-                          color: isUp ? "rgba(76,175,80,0.6)" : "rgba(220,53,69,0.6)",
+                          alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 6, padding: "4px 10px",
+                          borderRadius: 4, background: sealBg, border: `1px solid ${sealLine}`,
+                          fontFamily: FONT_SANS, fontSize: 11, letterSpacing: ".16em", color: sealText,
                         }}>
-                          {isUp ? "↑ Upright" : "↓ Reversed"}
+                          <Icon name={isUp ? "arrowUp" : "arrowDown"} size={10} stroke={2.4} color={sealText} />
+                          {isUp ? "UPRIGHT" : "REVERSED"}
                         </div>
-                        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.5)", fontWeight: 300 }}>
+                        <div style={{ fontFamily: FONT_SERIF, fontStyle: "italic", fontSize: 16.5, lineHeight: 1.45, color: C.textSoft }}>
                           {meanings.slice(0, 3).join(" · ")}
                         </div>
+                        <button
+                          onClick={() => setCotdExpanded(!cotdExpanded)}
+                          style={{ ...linkBtn, borderBottom: "none", marginTop: 4, display: "flex", alignItems: "center", gap: 7, fontSize: 13.5, fontFamily: FONT_SANS }}
+                        >
+                          {cotdExpanded ? "Close the meaning" : "Read the meaning"}
+                          <Icon name={cotdExpanded ? "chevron" : "arrowRight"} size={13} color={C.goldSoft} stroke={1.8}
+                            style={cotdExpanded ? { transform: "rotate(-90deg)" } : undefined} />
+                        </button>
                       </div>
-                      <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.3)" }}>{cotdExpanded ? "▲" : "▼"}</div>
                     </div>
 
-                    {/* Expanded */}
                     {cotdExpanded && (
-                      <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid rgba(201,168,76,0.1)", animation: "fadeUp 0.3s ease-out" }}>
+                      <div style={{ paddingTop: 14, borderTop: `1px solid ${C.ruleGold}`, animation: "fadeUp 0.3s ease-out" }}>
                         {cotd.description && (
-                          <div style={{ fontFamily: "'Crimson Text', serif", fontSize: 14, color: "rgba(232,220,200,0.7)", lineHeight: 1.7, fontStyle: "italic", marginBottom: 12 }}>
+                          <div style={{ fontFamily: FONT_SERIF, fontSize: 15.5, color: C.textSoft, lineHeight: 1.65, fontStyle: "italic", marginBottom: 12 }}>
                             {cotd.description}
                           </div>
                         )}
-                        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(232,220,200,0.6)", fontWeight: 300, lineHeight: 1.6 }}>
-                          <strong style={{ color: isUp ? "rgba(76,175,80,0.7)" : "rgba(220,53,69,0.7)" }}>
-                            {isUp ? "Upright" : "Reversed"}:
-                          </strong> {meanings.join(", ")}
+                        <div style={{ fontFamily: FONT_SANS, fontSize: 13, color: C.textDim, lineHeight: 1.65 }}>
+                          <strong style={{ color: sealText, fontWeight: 600 }}>{isUp ? "Upright" : "Reversed"}:</strong> {meanings.join(", ")}
                         </div>
-                        <div style={{ fontFamily: "'Crimson Text', serif", fontSize: 13, color: "rgba(201,168,76,0.5)", fontStyle: "italic", marginTop: 12, textAlign: "center" }}>
-                          ✦ What might this card be asking of you today? ✦
+                        <div style={{ fontFamily: FONT_SERIF, fontSize: 15, color: C.brass, fontStyle: "italic", marginTop: 12, textAlign: "center" }}>
+                          What might this card be asking of you today?
                         </div>
                       </div>
                     )}
@@ -1808,223 +1963,237 @@ export default function App() {
               );
             })()}
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 28 }}>
-              {[
-                { label: "Mastered", value: stats.mastered, icon: "◆" },
-                { label: "Best Streak", value: bestStreak, icon: "🔥" },
-                { label: "Sessions", value: totalSessions, icon: "✦" },
-              ].map(s => (
-                <div key={s.label} style={{ textAlign: "center", padding: "14px 8px", background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.1)", borderRadius: 12 }}>
-                  <div style={{ fontSize: 16, marginBottom: 4 }}>{s.icon}</div>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 20, color: "#c9a84c", fontWeight: 600 }}>{s.value}</div>
-                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.5)", letterSpacing: 1, marginTop: 2 }}>{s.label.toUpperCase()}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Due review queue */}
-            {dueCards.length > 0 && (
-              <div onClick={startDueReview} style={{
-                padding: "16px 20px", marginBottom: 16, cursor: "pointer", borderRadius: 14,
-                background: "linear-gradient(135deg, rgba(76,175,80,0.1), rgba(76,175,80,0.02))",
-                border: "1px solid rgba(76,175,80,0.3)",
-                display: "flex", alignItems: "center", gap: 14, transition: "all 0.2s ease",
-              }}>
-                <div style={{ fontSize: 22, flexShrink: 0 }}>⏳</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 14, color: "#e8dcc8", fontWeight: 500 }}>
-                    {dueCards.length} card{dueCards.length !== 1 ? "s" : ""} due for review
-                  </div>
-                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.5)", fontWeight: 300 }}>
-                    Clear the queue daily to keep memories fresh
-                  </div>
-                </div>
-                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "rgba(76,175,80,0.7)", letterSpacing: 1, flexShrink: 0 }}>REVIEW →</div>
-              </div>
-            )}
+            {/* Engraved plaque — three figures instead of three boxes. */}
+            <StatPlaque items={[
+              { value: roman(stats.mastered), label: "MASTERED" },
+              { value: roman(bestStreak), label: "BEST RUN" },
+              { value: roman(totalSessions), label: "SITTINGS" },
+            ]} />
 
             {leeches.length > 0 && (
-              <div onClick={() => { setStudyFilter("leeches"); setScreen("study"); }} style={{
-                padding: "12px 16px", marginBottom: 16, cursor: "pointer", borderRadius: 12,
-                background: "rgba(201,168,76,0.05)", border: "1px solid rgba(201,168,76,0.14)",
-                display: "flex", alignItems: "center", gap: 10, transition: "all 0.2s ease",
+              <div className="quiet-row" onClick={() => { setStudyFilter("leeches"); setScreen("study"); }} style={{
+                display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderRadius: 14,
+                background: S.panelFlat, border: `1px solid ${C.ruleSoft}`, cursor: "pointer",
               }}>
-                <span style={{ fontSize: 15, opacity: 0.6, flexShrink: 0 }}>🜸</span>
-                <div style={{ flex: 1, fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.55)", fontWeight: 300, lineHeight: 1.5 }}>
-                  <span style={{ color: "rgba(201,168,76,0.8)", fontWeight: 400 }}>{leeches.length} card{leeches.length !== 1 ? "s" : ""}</span> keep slipping — try a different approach
+                <Icon name="alembic" size={18} color={C.brassDim} />
+                <div style={{ flex: 1, fontFamily: FONT_SANS, fontSize: 12.5, color: C.goldDim, lineHeight: 1.5 }}>
+                  <span style={{ color: C.goldSoft }}>{leeches.length} card{leeches.length !== 1 ? "s" : ""}</span> keep slipping — try a different angle
                 </div>
-                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "rgba(201,168,76,0.3)", letterSpacing: 1, flexShrink: 0 }}>REVIEW →</div>
+                <Icon name="chevron" size={14} color={C.goldGhost} stroke={1.8} />
               </div>
             )}
 
             {canUnlockMinor && (
-              <div onClick={handleUnlockMinor} style={{ padding: "16px 20px", background: "linear-gradient(135deg, rgba(201,168,76,0.12), rgba(201,168,76,0.04))", border: "1px solid rgba(201,168,76,0.35)", borderRadius: 14, marginBottom: 24, cursor: "pointer", textAlign: "center", animation: "pulse 2s ease-in-out infinite" }}>
-                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 14, color: "#c9a84c", letterSpacing: 1, marginBottom: 4 }}>✦ UNLOCK MINOR ARCANA ✦</div>
-                <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.6)" }}>You've learned 15+ Major Arcana — tap to unlock all 78 cards</div>
-              </div>
-            )}
-
-            {/* Daily Focus */}
-            {dailyFocus && (
-              <div onClick={startDailyFocus} style={{
-                padding: "18px 20px", marginBottom: 20, cursor: "pointer", borderRadius: 16,
-                background: "linear-gradient(135deg, rgba(201,168,76,0.08), rgba(201,168,76,0.02))",
-                border: "1px solid rgba(201,168,76,0.2)",
-                transition: "all 0.3s ease",
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                  <div style={{
-                    width: 44, height: 44, borderRadius: 12,
-                    background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.15)",
-                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0,
-                  }}>{dailyFocus.icon}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.4)", letterSpacing: 1, marginBottom: 4 }}>TODAY'S FOCUS</div>
-                    <div style={{ fontFamily: "'Cinzel', serif", fontSize: 15, color: "#e8dcc8", fontWeight: 500 }}>{dailyFocus.label}</div>
-                  </div>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "#c9a84c", opacity: 0.6 }}>GO →</div>
+              <GiltPanel radius={16} inner={{ padding: "16px 18px", gap: 10, alignItems: "center" }} onClick={handleUnlockMinor} style={{ animation: "pulse 2s ease-in-out infinite" }}>
+                <Icon name="key" size={22} color={C.goldBright} />
+                <div style={{ fontFamily: FONT_SERIF, fontSize: 21, color: C.goldPale, textAlign: "center" }}>Unlock the Minor Arcana</div>
+                <div style={{ fontFamily: FONT_SANS, fontSize: 12.5, color: C.textDim, textAlign: "center" }}>
+                  Fifteen Major Arcana learned — tap to open all 78 cards
                 </div>
-              </div>
+              </GiltPanel>
             )}
 
-            {/* The Fool's Journey — guided learning path */}
-            <div style={{ marginBottom: 24 }}>
-              <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 14, letterSpacing: 2, color: "rgba(201,168,76,0.6)", marginBottom: 8, fontWeight: 500 }}>THE FOOL'S JOURNEY</h2>
-              <p style={{ fontFamily: "'Crimson Text', serif", fontSize: 13, color: "rgba(232,220,200,0.55)", fontStyle: "italic", lineHeight: 1.6, margin: "0 0 14px" }}>
-                One story runs through the Major Arcana: the Fool — card 0 — sets out on a journey, and every card after is a stage of it.
-                Learn the tale chapter by chapter; each opens once the one before is learned.
-              </p>
+            {/* The Fool's Journey — a strip plus the chapter you're in. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <SectionHead title="The Fool's Journey" trailing={
+                <SectionNote>{roman(journeyComplete ? journey.length : chapterNo)} / {roman(journey.length)}</SectionNote>
+              } />
+              <ProgressStrip segments={journey.map(ch => ch.total ? ch.known / ch.total : 0)} />
+
               {journeyComplete ? (
-                <div style={{ padding: "14px 18px", borderRadius: 12, background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.2)", textAlign: "center" }}>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 13, color: "#c9a84c" }}>✦ Journey complete — all 22 Major Arcana learned ✦</div>
+                <div style={{ padding: "16px 18px", borderRadius: 18, background: S.chapter, border: `1px solid ${C.frame}`, display: "flex", alignItems: "center", gap: 12, justifyContent: "center" }}>
+                  <Icon name="check" size={16} color={C.verdigris} stroke={2} />
+                  <span style={{ fontFamily: FONT_SERIF, fontSize: 19, color: C.goldPale }}>Journey complete — all 22 Major Arcana learned</span>
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {journey.map(ch => (
-                    <div key={ch.id} onClick={() => ch.unlocked && startChapterQuiz(ch)} style={{
-                      padding: "12px 16px", borderRadius: 12, display: "flex", alignItems: "center", gap: 12,
-                      background: ch.complete ? "rgba(76,175,80,0.05)" : "rgba(201,168,76,0.04)",
-                      border: `1px solid ${ch.complete ? "rgba(76,175,80,0.2)" : ch.unlocked ? "rgba(201,168,76,0.2)" : "rgba(201,168,76,0.08)"}`,
-                      cursor: ch.unlocked ? "pointer" : "default",
-                      opacity: ch.unlocked ? 1 : 0.45,
-                      transition: "all 0.2s ease",
-                    }}>
-                      <div style={{ fontSize: 20, flexShrink: 0, filter: ch.unlocked ? "none" : "grayscale(1)" }}>{ch.unlocked ? ch.icon : "🔒"}</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 500, color: ch.unlocked ? "#e8dcc8" : "rgba(201,168,76,0.4)" }}>{ch.title}</div>
-                        {ch.unlocked ? (
-                          <>
-                            <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.5)", fontWeight: 400, letterSpacing: 0.5, marginTop: 2 }}>
-                              {ch.cardIds.map(id => MAJOR_ARCANA[id].name).join(" · ")}
-                            </div>
-                            <div style={{ fontFamily: "'Crimson Text', serif", fontSize: 12, color: "rgba(232,220,200,0.5)", fontStyle: "italic", lineHeight: 1.5, marginTop: 4 }}>
-                              {ch.story}
-                            </div>
-                          </>
-                        ) : (
-                          <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", fontWeight: 300 }}>{ch.subtitle}</div>
-                        )}
-                      </div>
-                      <div style={{ flexShrink: 0, textAlign: "right" }}>
-                        {ch.complete ? (
-                          <span style={{ fontFamily: "'Cinzel', serif", fontSize: 14, color: "rgba(76,175,80,0.7)" }}>✓</span>
-                        ) : ch.unlocked ? (
-                          <div>
-                            <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: "#c9a84c" }}>{ch.known}/{ch.total}</div>
-                            <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 9, color: "rgba(201,168,76,0.4)", letterSpacing: 1 }}>BEGIN →</div>
-                          </div>
-                        ) : null}
-                      </div>
+                <div className="mode-row" onClick={() => startChapterQuiz(currentChapter)} style={{
+                  borderRadius: 18, padding: 18, background: S.chapter, border: `1px solid ${C.ruleBright}`,
+                  display: "flex", gap: 14, cursor: "pointer",
+                }}>
+                  <span style={{ fontFamily: FONT_SERIF, fontSize: 46, lineHeight: 0.8, color: C.gold }}>{currentChapter.title.charAt(0)}</span>
+                  <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+                      <span style={{ fontFamily: FONT_SERIF, fontSize: 23, lineHeight: 1, color: C.goldPale }}>{currentChapter.title.slice(1)}</span>
+                      <span style={{ fontFamily: FONT_SANS, fontSize: 12, letterSpacing: ".1em", color: C.goldSoft, whiteSpace: "nowrap" }}>
+                        {currentChapter.known > 0
+                          ? `${roman(currentChapter.known)} / ${roman(currentChapter.total)}`
+                          : `${roman(currentChapter.total)} CARDS`}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div style={{ marginBottom: 12 }}>
-              <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 14, letterSpacing: 2, color: "rgba(201,168,76,0.6)", marginBottom: 14, fontWeight: 500 }}>PRACTICE</h2>
-
-              {/* Deck Filter */}
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.35)", letterSpacing: 1, marginBottom: 8 }}>CARD POOL</div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {[
-                    { key: "all", label: unlockedMinor ? "All 78" : "All" },
-                    { key: "major", label: "Major Arcana" },
-                    ...(unlockedMinor ? [
-                      { key: "minor", label: "All Minor" },
-                      { key: "wands", label: "🔥 Wands" },
-                      { key: "cups", label: "💧 Cups" },
-                      { key: "swords", label: "🌬 Swords" },
-                      { key: "pentacles", label: "🪙 Pentacles" },
-                    ] : []),
-                  ].map(f => (
-                    <button key={f.key} className={`filter-btn ${quizDeck === f.key ? "active" : ""}`} onClick={() => setQuizDeck(f.key)}>
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Orientation Filter */}
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.35)", letterSpacing: 1, marginBottom: 8 }}>ORIENTATION</div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  {[
-                    { key: "both", label: "Both" },
-                    { key: "upright", label: "↑ Upright" },
-                    { key: "reversed", label: "↓ Reversed" },
-                  ].map(f => (
-                    <button key={f.key} className={`filter-btn ${quizOrientation === f.key ? "active" : ""}`} onClick={() => setQuizOrientation(f.key)}>
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {[
-                  { mode: "card-to-meaning", icon: "🃏", title: "Card → Meaning", desc: "See the card, pick its keywords" },
-                  { mode: "meaning-to-card", icon: "🔮", title: "Meaning → Card", desc: "Read the meaning, name the card" },
-                  { mode: "image-to-card", icon: "🖼", title: "Image → Card", desc: "See the artwork, name the card" },
-                  { mode: "symbolism", icon: "🕯", title: "Symbolism", desc: "Decode the imagery of the Major Arcana" },
-                  { mode: "upright-reversed", icon: "⚖", title: "Upright vs Reversed", desc: "Know the difference" },
-                  { mode: "free-type", icon: "✍", title: "Free Recall", desc: "Type meanings from memory — no hints" },
-                  { mode: "fill-gaps", icon: "🧩", title: "Fill the Gaps", desc: "We show what you know — type what you don't" },
-                  ...(unlockedMinor ? [{ mode: "suit-logic", icon: "♟", title: "Suit & Number Logic", desc: "Learn the system — derive Minor Arcana meanings" }] : []),
-                  { mode: "mixed", icon: "🌙", title: "Mixed Practice", desc: "All modes, spaced repetition" },
-                ].map(m => (
-                  <div key={m.mode} className="mode-card" onClick={() => startQuiz(m.mode)}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                      <span style={{ fontSize: 24 }}>{m.icon}</span>
-                      <div>
-                        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 15, color: "#e8dcc8", fontWeight: 500, marginBottom: 2 }}>{m.title}</div>
-                        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.5)", fontWeight: 300 }}>{m.desc}</div>
-                      </div>
+                    <div style={{ fontFamily: FONT_SERIF, fontStyle: "italic", fontSize: 15.5, lineHeight: 1.5, color: C.textDim }}>
+                      {currentChapter.cardIds.map(id => MAJOR_ARCANA[id].name).join(" · ")}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: FONT_SANS, fontSize: 13.5, color: C.goldSoft }}>
+                      Continue chapter <Icon name="arrowRight" size={13} color={C.goldSoft} stroke={1.8} />
                     </div>
                   </div>
-                ))}
+                </div>
+              )}
+
+              <ChevronRow label={`All ${journey.length === 6 ? "six" : journey.length} chapters`} onClick={() => goTab("journey")} />
+            </div>
+
+            {/* Suggested practice — three, not nine. The rest live in the tab. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <SectionHead title="Suggested practice" trailing={<SectionNote>{roman(practiceModes.length)} MODES</SectionNote>} />
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <ModeRow icon="cardFace" title="Card → Meaning" desc="See the card, name its keywords" onClick={() => startQuiz("card-to-meaning")} />
+                <ModeRow icon="temple" title="Symbolism" desc="Decode the Major Arcana imagery" onClick={() => startQuiz("symbolism")} />
+                <ModeRow icon="mic" title="Voice drill" desc="Hands-free recall · Sprachmodus" emphasis onClick={() => setScreen("voice")} />
+                <ChevronRow label="All practice modes" onClick={() => goTab("practice")} />
               </div>
             </div>
 
-            <div style={{ marginTop: 16 }}>
-              <button className="nav-btn nav-btn-primary" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
-                onClick={() => setScreen("voice")}>🎙 Voice Drill · Sprachmodus</button>
-              <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", textAlign: "center", marginTop: 6, fontWeight: 300 }}>
-                Hands-free audio recall — study while your hands are busy
+            <Finial />
+          </div>
+        )}
+
+        {/* ═══ JOURNEY ═══ */}
+        {screen === "home" && homeTab === "journey" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <SectionHead title="The Fool's Journey" trailing={
+              <SectionNote>
+                {chaptersDone > 0
+                  ? `${roman(chaptersDone)} / ${roman(journey.length)} LEARNED`
+                  : `${roman(journey.length)} CHAPTERS`}
+              </SectionNote>
+            } />
+
+            <p style={{ margin: 0, fontFamily: FONT_SANS, fontSize: 14, lineHeight: 1.7, color: C.textDim }}>
+              One story runs through the Major Arcana: the Fool — card 0 — sets out on a journey, and every
+              card after is a stage of it. Learn the tale chapter by chapter; each opens once the one before
+              is learned.
+            </p>
+
+            <ProgressStrip segments={journey.map(ch => ch.total ? ch.known / ch.total : 0)} />
+
+            {journeyComplete && (
+              <div style={{ padding: "16px 18px", borderRadius: 18, background: S.chapter, border: `1px solid ${C.frame}`, display: "flex", alignItems: "center", gap: 12, justifyContent: "center" }}>
+                <Icon name="check" size={16} color={C.verdigris} stroke={2} />
+                <span style={{ fontFamily: FONT_SERIF, fontSize: 19, color: C.goldPale }}>Journey complete — all 22 Major Arcana learned</span>
+              </div>
+            )}
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {journey.map(ch => {
+                const locked = !ch.unlocked;
+                return (
+                  <div
+                    key={ch.id}
+                    className={locked ? undefined : "mode-row"}
+                    onClick={() => ch.unlocked && startChapterQuiz(ch)}
+                    style={{
+                      borderRadius: 18, padding: 16, display: "flex", gap: 14,
+                      background: ch.complete ? `linear-gradient(155deg,#141F19 0%,${C.inkSoft} 100%)` : S.chapter,
+                      border: `1px solid ${ch.complete ? "#2E4A34" : locked ? C.rule : C.ruleBright}`,
+                      opacity: locked ? 0.55 : 1,
+                      cursor: locked ? "default" : "pointer",
+                    }}
+                  >
+                    <div style={{
+                      flex: "0 0 auto", width: 38, height: 38, borderRadius: "50%",
+                      border: `1px solid ${ch.complete ? "#2E4A34" : locked ? C.rule : C.frame}`,
+                      background: locked ? C.plumChip : "#1A1426",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <Icon name={locked ? "lock" : ch.glyph} size={18} color={locked ? C.goldFaint : ch.complete ? C.verdigris : C.goldSoft} />
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+                        <span style={{ fontFamily: FONT_SERIF, fontSize: 21, lineHeight: 1.1, color: locked ? C.goldDim : C.goldPale }}>{ch.title}</span>
+                        <span style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
+                          {ch.complete ? (
+                            <Icon name="check" size={15} color={C.verdigris} stroke={2} />
+                          ) : locked ? (
+                            <span style={{ fontFamily: FONT_SANS, fontSize: 10, letterSpacing: ".14em", color: C.goldFaint }}>LOCKED</span>
+                          ) : (
+                            <span style={{ fontFamily: FONT_SANS, fontSize: 12, letterSpacing: ".1em", color: C.goldSoft }}>
+                              {ch.known > 0 ? `${roman(ch.known)} / ${roman(ch.total)}` : `${roman(ch.total)} CARDS`}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+
+                      <div style={{ fontFamily: FONT_SERIF, fontStyle: "italic", fontSize: 15, lineHeight: 1.45, color: locked ? C.goldFaint : C.textDim }}>
+                        {locked ? ch.subtitle : ch.cardIds.map(id => MAJOR_ARCANA[id].name).join(" · ")}
+                      </div>
+
+                      {!locked && (
+                        <div style={{ fontFamily: FONT_SANS, fontSize: 12.5, lineHeight: 1.6, color: C.textFaint }}>{ch.story}</div>
+                      )}
+
+                      {!locked && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: FONT_SANS, fontSize: 13, color: C.goldSoft, marginTop: 2 }}>
+                          {ch.complete ? "Practise again" : ch.known > 0 ? "Continue chapter" : "Begin chapter"}
+                          <Icon name="arrowRight" size={13} color={C.goldSoft} stroke={1.8} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <Finial />
+          </div>
+        )}
+
+        {/* ═══ PRACTICE ═══ */}
+        {screen === "home" && homeTab === "practice" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+            <SectionHead title="Practice" trailing={<SectionNote>{roman(practiceModes.length)} MODES</SectionNote>} />
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <div style={{ fontFamily: FONT_SANS, fontSize: 11, color: C.goldFaint, letterSpacing: ".18em", marginBottom: 8 }}>CARD POOL</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {deckFilters.map(f => (
+                    <button key={f.key} className={`filter-btn ${quizDeck === f.key ? "active" : ""}`} onClick={() => setQuizDeck(f.key)}>
+                      {f.glyph && <Icon name={f.glyph} size={12} color="currentColor" style={{ marginRight: 6 }} />}
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontFamily: FONT_SANS, fontSize: 11, color: C.goldFaint, letterSpacing: ".18em", marginBottom: 8 }}>ORIENTATION</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {[
+                    { key: "both", label: "Both" },
+                    { key: "upright", label: "Upright", glyph: "arrowUp" },
+                    { key: "reversed", label: "Reversed", glyph: "arrowDown" },
+                  ].map(f => (
+                    <button key={f.key} className={`filter-btn ${quizOrientation === f.key ? "active" : ""}`} onClick={() => setQuizOrientation(f.key)}>
+                      {f.glyph && <Icon name={f.glyph} size={11} color="currentColor" stroke={2} style={{ marginRight: 6 }} />}
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button className="nav-btn nav-btn-ghost" style={{ flex: 1 }} onClick={() => setScreen("study")}>📖 Study</button>
-              <button className="nav-btn nav-btn-ghost" style={{ flex: 1 }} onClick={() => setScreen("progress")}>📊 Progress</button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {practiceModes.map(m => (
+                <ModeRow key={m.mode} icon={m.glyph} title={m.title} desc={m.desc} onClick={() => startQuiz(m.mode)} />
+              ))}
             </div>
-            <div style={{ marginTop: 10 }}>
-              <button className="nav-btn nav-btn-ghost" style={{ width: "100%" }} onClick={() => { setScreen("reference"); setRefSearch(""); }}>🔍 Quick Reference</button>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <SectionHead title="Beyond the quiz" />
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <ModeRow icon="mic" title="Voice drill" desc="Hands-free audio recall · Sprachmodus" emphasis onClick={() => setScreen("voice")} />
+                <ModeRow icon="bookOpen" title="Study" desc="Read every card in full, with your own notes" onClick={() => setScreen("study")} />
+                <ModeRow icon="search" title="Quick reference" desc="Search by card name or meaning" onClick={() => { setScreen("reference"); setRefSearch(""); }} />
+              </div>
             </div>
-            <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.25)", textAlign: "center", marginTop: 24, fontWeight: 300 }}>
+
+            <div style={{ fontFamily: FONT_SANS, fontSize: 10.5, color: C.goldFaint, textAlign: "center", letterSpacing: ".04em" }}>
               Card imagery: Rider–Waite–Smith deck (1909), public domain
             </div>
+
+            <Finial />
           </div>
         )}
 
@@ -2033,7 +2202,7 @@ export default function App() {
           <VoiceDrillMode
             buildQueue={buildVoiceQueue}
             onGrade={handleVoiceGrade}
-            onExit={() => setScreen("home")}
+            onExit={() => goTab("practice")}
             modeStats={modeStats}
             scoreAnswer={scoreAnswer}
             unlockedMinor={unlockedMinor}
@@ -2047,22 +2216,23 @@ export default function App() {
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 16px", fontSize: 11 }} onClick={endQuiz}>✕ End</button>
-              <div style={{ padding: "4px 12px", borderRadius: 20, fontFamily: "'Cinzel', serif", fontSize: 12, letterSpacing: 1, background: currentStreak > 0 ? "rgba(201,168,76,0.12)" : "rgba(255,255,255,0.05)", color: currentStreak > 0 ? "#c9a84c" : "rgba(255,255,255,0.3)" }}>🔥 {currentStreak}</div>
-              <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.5)" }}>{sessionCorrect}/{sessionTotal}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 20, fontFamily: FONT_SANS, fontSize: 12, letterSpacing: 1, background: currentStreak > 0 ? "rgba(201,163,78,0.12)" : "rgba(255,255,255,0.04)", color: currentStreak > 0 ? C.goldBright : "rgba(255,255,255,0.3)" }}>
+                <Icon name="flame" size={12} color="currentColor" stroke={1.5} /> {currentStreak}</div>
+              <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.5)" }}>{sessionCorrect}/{sessionTotal}</div>
             </div>
             {(customPool || quizDeck !== "all" || quizOrientation !== "both") && (
               <div style={{ textAlign: "center", marginBottom: 18, display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
                 {customPool ? (
-                  <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.3)", letterSpacing: 1, padding: "3px 10px", borderRadius: 10, background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.08)" }}>
+                  <span style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.3)", letterSpacing: 1, padding: "3px 10px", borderRadius: 10, background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.08)" }}>
                     {customPool.label}
                   </span>
                 ) : quizDeck !== "all" && (
-                  <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.3)", letterSpacing: 1, padding: "3px 10px", borderRadius: 10, background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.08)" }}>
+                  <span style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.3)", letterSpacing: 1, padding: "3px 10px", borderRadius: 10, background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.08)" }}>
                     {quizDeck === "major" ? "MAJOR ARCANA" : quizDeck === "minor" ? "MINOR ARCANA" : quizDeck.toUpperCase()}
                   </span>
                 )}
                 {quizOrientation !== "both" && (
-                  <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, letterSpacing: 1, padding: "3px 10px", borderRadius: 10, border: "1px solid rgba(201,168,76,0.08)",
+                  <span style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 10, letterSpacing: 1, padding: "3px 10px", borderRadius: 10, border: "1px solid rgba(201,168,76,0.08)",
                     color: quizOrientation === "upright" ? "rgba(76,175,80,0.5)" : "rgba(220,53,69,0.5)",
                     background: quizOrientation === "upright" ? "rgba(76,175,80,0.06)" : "rgba(220,53,69,0.06)",
                   }}>
@@ -2074,7 +2244,7 @@ export default function App() {
 
             {/* Question Card */}
             <div style={{ padding: 28, background: "linear-gradient(160deg, rgba(201,168,76,0.06), rgba(201,168,76,0.02))", border: "1px solid rgba(201,168,76,0.15)", borderRadius: 20, marginBottom: 24, textAlign: "center", animation: "cardReveal 0.5s ease-out" }}>
-              <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.4)", letterSpacing: 2, marginBottom: 12, textTransform: "uppercase" }}>
+              <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.4)", letterSpacing: 2, marginBottom: 12, textTransform: "uppercase" }}>
                 {currentQ.type === "card-to-meaning" && "What does this card mean?"}
                 {currentQ.type === "meaning-to-card" && "Which card matches?"}
                 {currentQ.type === "upright-reversed" && "Choose the correct meaning"}
@@ -2113,13 +2283,13 @@ export default function App() {
                 <div style={{ fontSize: 32, marginBottom: 8, filter: `drop-shadow(0 0 10px ${currentQ.suitColor}55)`, color: currentQ.suitColor }}>♟</div>
               )}
               {currentQ.type !== "fill-gaps" && currentQ.prompt && (
-                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 22, fontWeight: 600, color: "#e8dcc8", marginBottom: 8, lineHeight: 1.5 }}>
+                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 600, color: "#e8dcc8", marginBottom: 8, lineHeight: 1.5 }}>
                   {currentQ.prompt}
                 </div>
               )}
               {currentQ.type === "fill-gaps" && (
                 <div>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 22, fontWeight: 600, color: "#e8dcc8", marginBottom: 14, lineHeight: 1.5 }}>
+                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 600, color: "#e8dcc8", marginBottom: 14, lineHeight: 1.5 }}>
                     {currentQ.prompt}
                   </div>
                   {/* Show known meanings */}
@@ -2127,7 +2297,7 @@ export default function App() {
                     {currentQ.knownMeanings.map((m, i) => (
                       <span key={i} style={{
                         padding: "5px 12px", borderRadius: 8, fontSize: 13,
-                        fontFamily: "'Raleway', sans-serif", fontWeight: 400,
+                        fontFamily: "'Source Sans 3', sans-serif", fontWeight: 400,
                         background: "rgba(76,175,80,0.1)", border: "1px solid rgba(76,175,80,0.2)",
                         color: "rgba(76,175,80,0.7)",
                       }}>✓ {m}</span>
@@ -2135,7 +2305,7 @@ export default function App() {
                     {currentQ.gapMeanings.map((_, i) => (
                       <span key={`gap-${i}`} style={{
                         padding: "5px 12px", borderRadius: 8, fontSize: 13,
-                        fontFamily: "'Raleway', sans-serif", fontWeight: 400,
+                        fontFamily: "'Source Sans 3', sans-serif", fontWeight: 400,
                         background: "rgba(201,168,76,0.06)", border: "1px dashed rgba(201,168,76,0.25)",
                         color: "rgba(201,168,76,0.4)",
                       }}>???</span>
@@ -2144,7 +2314,7 @@ export default function App() {
                 </div>
               )}
               {currentQ.subtitle && (
-                <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.5)", fontStyle: "italic", fontWeight: 300 }}>
+                <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.5)", fontStyle: "italic", fontWeight: 300 }}>
                   {currentQ.subtitle}
                 </div>
               )}
@@ -2159,22 +2329,22 @@ export default function App() {
                   border: `2px solid ${selectedAnswer?.correct ? "rgba(76,175,80,0.6)" : "rgba(220,53,69,0.6)"}`,
                   boxShadow: selectedAnswer?.correct ? "0 0 24px rgba(76,175,80,0.15)" : "0 0 24px rgba(220,53,69,0.15)",
                 }}>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 20, color: selectedAnswer?.correct ? "#4caf50" : "#dc3545", marginBottom: 8, fontWeight: 700, letterSpacing: 1 }}>
+                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: selectedAnswer?.correct ? "#4caf50" : "#dc3545", marginBottom: 8, fontWeight: 700, letterSpacing: 1 }}>
                     {selectedAnswer?.correct ? "✦ Correct!" : "✕ Not quite"}
                   </div>
                   {["suit-meaning", "rank-meaning", "derivation", "symbol-to-card", "symbol-meaning"].includes(currentQ.type) ? (
-                    <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(232,220,200,0.7)", lineHeight: 1.8, fontWeight: 300, whiteSpace: "pre-line" }}>
+                    <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, color: "rgba(232,220,200,0.7)", lineHeight: 1.8, fontWeight: 300, whiteSpace: "pre-line" }}>
                       {currentQ.correctExplanation}
                     </div>
                   ) : (
-                    <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(232,220,200,0.6)", lineHeight: 1.6, fontWeight: 300 }}>
+                    <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 12, color: "rgba(232,220,200,0.6)", lineHeight: 1.6, fontWeight: 300 }}>
                       <strong style={{ color: "#c9a84c" }}>{currentQ.card.name}</strong><br />
                       Upright: {currentQ.card.upright.join(", ")}<br />
                       Reversed: {currentQ.card.reversed.join(", ")}
                     </div>
                   )}
                 </div>
-                <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={advance}>Next Card → <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span></button>
+                <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={advance}>Next Card → <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Source Sans 3', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span></button>
                 {selectedAnswer?.correct && (
                   <button
                     onClick={() => setGuessed(true)}
@@ -2182,12 +2352,12 @@ export default function App() {
                     style={{
                       display: "block", width: "100%", marginTop: 10, padding: "6px 0",
                       background: "transparent", border: "none",
-                      fontFamily: "'Raleway', sans-serif", fontSize: 12, fontWeight: 300, letterSpacing: 0.5,
+                      fontFamily: "'Source Sans 3', sans-serif", fontSize: 12, fontWeight: 300, letterSpacing: 0.5,
                       color: guessed ? "#c9a84c" : "rgba(201,168,76,0.55)",
                       cursor: guessed ? "default" : "pointer",
                     }}
                   >
-                    {guessed ? "✓ Marked as guessed" : "I guessed"} <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[G]</span>
+                    {guessed ? "✓ Marked as guessed" : "I guessed"} <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Source Sans 3', sans-serif", textTransform: "none", letterSpacing: 0 }}>[G]</span>
                   </button>
                 )}
               </div>
@@ -2206,7 +2376,7 @@ export default function App() {
                     <span style={{
                       display: "inline-flex", alignItems: "center", justifyContent: "center",
                       width: 22, height: 22, marginRight: 10,
-                      fontFamily: "'Cinzel', serif", fontSize: 11, opacity: 0.4,
+                      fontFamily: "'Cormorant Garamond', serif", fontSize: 11, opacity: 0.4,
                       borderRadius: 4, border: "1px solid rgba(201,168,76,0.1)",
                       background: "rgba(201,168,76,0.03)", flexShrink: 0,
                     }}>{i + 1}</span>
@@ -2232,7 +2402,7 @@ export default function App() {
                     Check Answer
                   </button>
                 </div>
-                <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.3)", marginTop: 8, textAlign: "center" }}>
+                <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.3)", marginTop: 8, textAlign: "center" }}>
                   Press Enter to submit · Separate meanings with commas
                 </div>
               </div>
@@ -2255,7 +2425,7 @@ export default function App() {
                     Check Answer
                   </button>
                 </div>
-                <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.3)", marginTop: 8, textAlign: "center" }}>
+                <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.3)", marginTop: 8, textAlign: "center" }}>
                   Press Enter to submit · Separate meanings with commas
                 </div>
               </div>
@@ -2270,18 +2440,18 @@ export default function App() {
                   border: `2px solid ${typeResult.score >= 0.4 ? "rgba(76,175,80,0.6)" : "rgba(220,53,69,0.6)"}`,
                   boxShadow: typeResult.score >= 0.4 ? "0 0 24px rgba(76,175,80,0.15)" : "0 0 24px rgba(220,53,69,0.15)",
                 }}>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 20, color: typeResult.score >= 0.4 ? "#4caf50" : "#dc3545", marginBottom: 10, fontWeight: 700, letterSpacing: 1 }}>
+                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: typeResult.score >= 0.4 ? "#4caf50" : "#dc3545", marginBottom: 10, fontWeight: 700, letterSpacing: 1 }}>
                     {typeResult.score >= 1 ? "✦ Perfect!" : typeResult.score >= 0.4 ? "✦ Getting there!" : "✕ Keep at it"}
-                    <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, fontWeight: 300, marginLeft: 8, opacity: 0.7 }}>
+                    <span style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, fontWeight: 300, marginLeft: 8, opacity: 0.7 }}>
                       {typeResult.matched.length}/{typeResult.total} gaps filled
                     </span>
                   </div>
 
                   {typeResult.matched.length > 0 && (
                     <div style={{ marginBottom: 12 }}>
-                      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "rgba(76,175,80,0.6)", letterSpacing: 1, marginBottom: 6 }}>YOU FILLED</div>
+                      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 10, color: "rgba(76,175,80,0.6)", letterSpacing: 1, marginBottom: 6 }}>YOU FILLED</div>
                       {typeResult.matched.map((m, i) => (
-                        <div key={i} style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(76,175,80,0.8)", marginBottom: 4, fontWeight: 300 }}>
+                        <div key={i} style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, color: "rgba(76,175,80,0.8)", marginBottom: 4, fontWeight: 300 }}>
                           ✓ {m.meaning}
                           {m.score < 1 && <span style={{ opacity: 0.5, fontSize: 11 }}> (you typed: {m.input})</span>}
                         </div>
@@ -2291,16 +2461,16 @@ export default function App() {
 
                   {typeResult.missed.length > 0 && (
                     <div>
-                      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "rgba(220,53,69,0.6)", letterSpacing: 1, marginBottom: 6 }}>STILL MISSING</div>
+                      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 10, color: "rgba(220,53,69,0.6)", letterSpacing: 1, marginBottom: 6 }}>STILL MISSING</div>
                       {typeResult.missed.map((m, i) => (
-                        <div key={i} style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(220,53,69,0.6)", marginBottom: 4, fontWeight: 300 }}>
+                        <div key={i} style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, color: "rgba(220,53,69,0.6)", marginBottom: 4, fontWeight: 300 }}>
                           ✗ {m}
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-                <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={nextQuestion}>Next Card → <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span></button>
+                <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={nextQuestion}>Next Card → <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Source Sans 3', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span></button>
               </div>
             )}
 
@@ -2313,18 +2483,18 @@ export default function App() {
                   border: `2px solid ${typeResult.score >= 0.4 ? "rgba(76,175,80,0.6)" : "rgba(220,53,69,0.6)"}`,
                   boxShadow: typeResult.score >= 0.4 ? "0 0 24px rgba(76,175,80,0.15)" : "0 0 24px rgba(220,53,69,0.15)",
                 }}>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 20, color: typeResult.score >= 0.4 ? "#4caf50" : "#dc3545", marginBottom: 10, fontWeight: 700, letterSpacing: 1 }}>
+                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: typeResult.score >= 0.4 ? "#4caf50" : "#dc3545", marginBottom: 10, fontWeight: 700, letterSpacing: 1 }}>
                     {typeResult.score >= 0.8 ? "✦ Excellent!" : typeResult.score >= 0.4 ? "✦ Good effort!" : "✕ Keep practicing"}
-                    <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, fontWeight: 300, marginLeft: 8, opacity: 0.7 }}>
+                    <span style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, fontWeight: 300, marginLeft: 8, opacity: 0.7 }}>
                       {typeResult.matched.length}/{typeResult.total} matched
                     </span>
                   </div>
 
                   {typeResult.matched.length > 0 && (
                     <div style={{ marginBottom: 12 }}>
-                      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "rgba(76,175,80,0.6)", letterSpacing: 1, marginBottom: 6 }}>YOU GOT</div>
+                      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 10, color: "rgba(76,175,80,0.6)", letterSpacing: 1, marginBottom: 6 }}>YOU GOT</div>
                       {typeResult.matched.map((m, i) => (
-                        <div key={i} style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(76,175,80,0.8)", marginBottom: 4, fontWeight: 300 }}>
+                        <div key={i} style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, color: "rgba(76,175,80,0.8)", marginBottom: 4, fontWeight: 300 }}>
                           ✓ {m.meaning}
                           {m.score < 1 && <span style={{ opacity: 0.5, fontSize: 11 }}> (you typed: {m.input})</span>}
                         </div>
@@ -2334,16 +2504,16 @@ export default function App() {
 
                   {typeResult.missed.length > 0 && (
                     <div>
-                      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "rgba(220,53,69,0.6)", letterSpacing: 1, marginBottom: 6 }}>MISSED</div>
+                      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 10, color: "rgba(220,53,69,0.6)", letterSpacing: 1, marginBottom: 6 }}>MISSED</div>
                       {typeResult.missed.map((m, i) => (
-                        <div key={i} style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(220,53,69,0.6)", marginBottom: 4, fontWeight: 300 }}>
+                        <div key={i} style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, color: "rgba(220,53,69,0.6)", marginBottom: 4, fontWeight: 300 }}>
                           ✗ {m}
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-                <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={nextQuestion}>Next Card → <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Raleway', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span></button>
+                <button className="nav-btn nav-btn-primary" style={{ width: "100%" }} onClick={nextQuestion}>Next Card → <span className="kbd-hint" style={{ opacity: 0.5, fontSize: 10, fontFamily: "'Source Sans 3', sans-serif", textTransform: "none", letterSpacing: 0 }}>[Enter]</span></button>
               </div>
             )}
 
@@ -2356,25 +2526,26 @@ export default function App() {
             <div style={{ fontSize: 48, marginBottom: 16 }}>
               {sessionTotal === 0 ? "🌙" : sessionCorrect / sessionTotal >= 0.8 ? "✨" : sessionCorrect / sessionTotal >= 0.5 ? "🌗" : "🌑"}
             </div>
-            <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 24, fontWeight: 500, letterSpacing: 2, marginBottom: 8, color: "#c9a84c" }}>Session Complete</h2>
-            <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 14, color: "rgba(201,168,76,0.5)", marginBottom: 32, fontWeight: 300 }}>
+            <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 500, letterSpacing: 2, marginBottom: 8, color: "#c9a84c" }}>Session Complete</h2>
+            <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 14, color: "rgba(201,168,76,0.5)", marginBottom: 32, fontWeight: 300 }}>
               {sessionTotal === 0 ? "Come back when you're ready" : `${sessionCorrect} of ${sessionTotal} correct · Best streak: ${bestStreak}`}
             </div>
             {sessionTotal > 0 && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 32 }}>
                 <div style={{ padding: 16, background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.1)", borderRadius: 12 }}>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 22, color: "#c9a84c", fontWeight: 600 }}>{Math.round((sessionCorrect / sessionTotal) * 100)}%</div>
-                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.5)", letterSpacing: 1, marginTop: 4 }}>ACCURACY</div>
+                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, color: "#c9a84c", fontWeight: 600 }}>{Math.round((sessionCorrect / sessionTotal) * 100)}%</div>
+                  <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.5)", letterSpacing: 1, marginTop: 4 }}>ACCURACY</div>
                 </div>
                 <div style={{ padding: 16, background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.1)", borderRadius: 12 }}>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 22, color: "#c9a84c", fontWeight: 600 }}>🔥 {currentStreak}</div>
-                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.5)", letterSpacing: 1, marginTop: 4 }}>STREAK</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, fontFamily: FONT_SERIF, fontSize: 24, color: C.goldLight }}>
+                    <Icon name="flame" size={16} color={C.gold} stroke={1.5} /> {currentStreak}</div>
+                  <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.5)", letterSpacing: 1, marginTop: 4 }}>STREAK</div>
                 </div>
               </div>
             )}
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <button className="nav-btn nav-btn-primary" onClick={() => startQuiz(quizMode, customPool)}>Practice Again</button>
-              <button className="nav-btn nav-btn-ghost" onClick={() => setScreen("home")}>← Home</button>
+              <button className="nav-btn nav-btn-ghost" onClick={() => goTab("today")}>← Home</button>
             </div>
           </div>
         )}
@@ -2383,8 +2554,8 @@ export default function App() {
         {screen === "study" && !studyCard && (
           <div>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 20, gap: 12 }}>
-              <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 14px", fontSize: 11 }} onClick={() => setScreen("home")}>← Back</button>
-              <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 18, fontWeight: 500, letterSpacing: 2, color: "#c9a84c" }}>Study</h2>
+              <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 14px", fontSize: 11 }} onClick={() => goTab("practice")}>← Back</button>
+              <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 500, letterSpacing: 2, color: "#c9a84c" }}>Study</h2>
             </div>
             <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
               {[{ key: "major", label: "Major Arcana" }, ...(unlockedMinor ? [{ key: "wands", label: "Wands" }, { key: "cups", label: "Cups" }, { key: "swords", label: "Swords" }, { key: "pentacles", label: "Pentacles" }] : [])].map(f => (
@@ -2416,8 +2587,8 @@ export default function App() {
                   return (
                     <div style={{ textAlign: "center", padding: 32 }}>
                       <div style={{ fontSize: 32, marginBottom: 12 }}>✨</div>
-                      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 16, color: "#c9a84c", marginBottom: 6 }}>All caught up!</div>
-                      <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.5)", fontWeight: 300 }}>No cards need review in this group right now.</div>
+                      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 16, color: "#c9a84c", marginBottom: 6 }}>All caught up!</div>
+                      <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.5)", fontWeight: 300 }}>No cards need review in this group right now.</div>
                     </div>
                   );
                 }
@@ -2426,7 +2597,7 @@ export default function App() {
                   const hasNote = !!personalNotes[card.id];
                   return (
                     <div key={card.id} className="study-card" onClick={() => { setStudyCard(card); setShowDescription(false); setEditingNote(false); setNoteText(personalNotes[card.id] || ""); }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 8, flexShrink: 0, background: `${accent}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: card.id < 22 ? 18 : 12, color: accent, fontFamily: "'Cinzel', serif", fontWeight: 600 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 8, flexShrink: 0, background: `${accent}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: card.id < 22 ? 18 : 12, color: accent, fontFamily: "'Cormorant Garamond', serif", fontWeight: 600 }}>
                         {card.id < 22 ? <span className="arcana-glyph" style={{ fontSize: 18 }}>{CARD_SYMBOLS[card.id] || "✦"}</span> : (() => {
                           const n = card.name.split(" ")[0];
                           const numMap = { "Ace": "A", "Two": "2", "Three": "3", "Four": "4", "Five": "5", "Six": "6", "Seven": "7", "Eight": "8", "Nine": "9", "Ten": "10", "Page": "P", "Knight": "Kn", "Queen": "Q", "King": "K" };
@@ -2434,10 +2605,10 @@ export default function App() {
                         })()}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 14, fontWeight: 500, color: "#e8dcc8" }}>
+                        <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, fontWeight: 500, color: "#e8dcc8" }}>
                           {card.name} {hasNote && <span style={{ fontSize: 10, opacity: 0.4 }}>📝</span>}
                         </div>
-                        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", fontWeight: 300 }}>{card.element} · {mastery.icon} {mastery.label}</div>
+                        <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", fontWeight: 300 }}>{card.element} · {mastery.icon} {mastery.label}</div>
                       </div>
                     </div>
                   );
@@ -2455,8 +2626,8 @@ export default function App() {
               <div style={{ marginBottom: 14 }}>
                 <CardImage card={studyCard} width={150} />
               </div>
-              <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: 22, fontWeight: 600, color: "#e8dcc8", marginBottom: 4 }}>{studyCard.name}</h3>
-              <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.5)", marginBottom: 16, fontWeight: 300 }}>{studyCard.numeral && `${studyCard.numeral} · `}{studyCard.element}</div>
+              <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 600, color: "#e8dcc8", marginBottom: 4 }}>{studyCard.name}</h3>
+              <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.5)", marginBottom: 16, fontWeight: 300 }}>{studyCard.numeral && `${studyCard.numeral} · `}{studyCard.element}</div>
               {ttsSupported && (
                 <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 20px", fontSize: 11, marginBottom: 16 }}
                   onClick={() => (studySpeaking ? stopReading() : readCardAloud(studyCard))}>
@@ -2465,8 +2636,8 @@ export default function App() {
               )}
               {studyCard.description && (
                 <div onClick={() => setShowDescription(!showDescription)} style={{ padding: 14, background: "rgba(201,168,76,0.04)", borderRadius: 10, cursor: "pointer", marginBottom: 16 }}>
-                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", letterSpacing: 1, marginBottom: 6 }}>{showDescription ? "DESCRIPTION" : "TAP TO REVEAL DESCRIPTION"}</div>
-                  {showDescription && <div style={{ fontFamily: "'Crimson Text', serif", fontSize: 14, color: "rgba(232,220,200,0.7)", lineHeight: 1.7, fontStyle: "italic" }}>{studyCard.description}</div>}
+                  <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", letterSpacing: 1, marginBottom: 6 }}>{showDescription ? "DESCRIPTION" : "TAP TO REVEAL DESCRIPTION"}</div>
+                  {showDescription && <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: "rgba(232,220,200,0.7)", lineHeight: 1.7, fontStyle: "italic" }}>{studyCard.description}</div>}
                 </div>
               )}
             </div>
@@ -2477,13 +2648,13 @@ export default function App() {
               if (!symData) return null;
               return (
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "rgba(201,168,76,0.4)", letterSpacing: 1, marginBottom: 4 }}>SYMBOLISM</div>
-                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.3)", fontWeight: 300, marginBottom: 10, fontStyle: "italic" }}>{symData.framing}</div>
+                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 11, color: "rgba(201,168,76,0.4)", letterSpacing: 1, marginBottom: 4 }}>SYMBOLISM</div>
+                  <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.3)", fontWeight: 300, marginBottom: 10, fontStyle: "italic" }}>{symData.framing}</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {symData.symbols.map((s, i) => (
                       <div key={i} style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(201,168,76,0.03)", border: "1px solid rgba(201,168,76,0.09)", display: "flex", gap: 12, alignItems: "flex-start" }}>
-                        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "rgba(201,168,76,0.55)", letterSpacing: 0.5, minWidth: 0, flexShrink: 0, maxWidth: "38%", paddingTop: 1, lineHeight: 1.4 }}>{s.symbol}</div>
-                        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(232,220,200,0.6)", fontWeight: 300, lineHeight: 1.55 }}>{s.meaning}</div>
+                        <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 11, color: "rgba(201,168,76,0.55)", letterSpacing: 0.5, minWidth: 0, flexShrink: 0, maxWidth: "38%", paddingTop: 1, lineHeight: 1.4 }}>{s.symbol}</div>
+                        <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 12, color: "rgba(232,220,200,0.6)", fontWeight: 300, lineHeight: 1.55 }}>{s.meaning}</div>
                       </div>
                     ))}
                   </div>
@@ -2497,8 +2668,8 @@ export default function App() {
                 padding: "14px 16px", marginBottom: 20, borderRadius: 12,
                 background: "rgba(201,168,76,0.05)", border: "1px solid rgba(201,168,76,0.18)",
               }}>
-                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "rgba(201,168,76,0.45)", letterSpacing: 1, marginBottom: 6 }}>🜸 THIS ONE NEEDS A NEW ANGLE</div>
-                <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.55)", fontWeight: 300, lineHeight: 1.65 }}>
+                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 10, color: "rgba(201,168,76,0.45)", letterSpacing: 1, marginBottom: 6 }}>🜸 THIS ONE NEEDS A NEW ANGLE</div>
+                <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.55)", fontWeight: 300, lineHeight: 1.65 }}>
                   Try writing a personal note below — a mnemonic, a vivid image, or a memory that makes this card yours. Or explore its connected cards for a fresh context.
                 </div>
               </div>
@@ -2507,20 +2678,20 @@ export default function App() {
             {/* Upright / Reversed */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div style={{ padding: 18, background: "rgba(76,175,80,0.04)", border: "1px solid rgba(76,175,80,0.12)", borderRadius: 14 }}>
-                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "rgba(76,175,80,0.6)", letterSpacing: 1, marginBottom: 10 }}>UPRIGHT</div>
-                {studyCard.upright.map((m, i) => <div key={i} style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(232,220,200,0.7)", marginBottom: 6, fontWeight: 300 }}>· {m}</div>)}
+                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 11, color: "rgba(76,175,80,0.6)", letterSpacing: 1, marginBottom: 10 }}>UPRIGHT</div>
+                {studyCard.upright.map((m, i) => <div key={i} style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, color: "rgba(232,220,200,0.7)", marginBottom: 6, fontWeight: 300 }}>· {m}</div>)}
               </div>
               <div style={{ padding: 18, background: "rgba(220,53,69,0.04)", border: "1px solid rgba(220,53,69,0.12)", borderRadius: 14 }}>
-                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "rgba(220,53,69,0.6)", letterSpacing: 1, marginBottom: 10 }}>REVERSED</div>
-                {studyCard.reversed.map((m, i) => <div key={i} style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(232,220,200,0.7)", marginBottom: 6, fontWeight: 300 }}>· {m}</div>)}
+                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 11, color: "rgba(220,53,69,0.6)", letterSpacing: 1, marginBottom: 10 }}>REVERSED</div>
+                {studyCard.reversed.map((m, i) => <div key={i} style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, color: "rgba(232,220,200,0.7)", marginBottom: 6, fontWeight: 300 }}>· {m}</div>)}
               </div>
             </div>
 
             {/* Keywords */}
             {studyCard.keywords && (
               <div style={{ marginTop: 16, padding: 14, background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.1)", borderRadius: 12, textAlign: "center" }}>
-                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "rgba(201,168,76,0.4)", letterSpacing: 1, marginBottom: 6 }}>KEYWORDS</div>
-                <div style={{ fontFamily: "'Crimson Text', serif", fontSize: 14, color: "rgba(201,168,76,0.7)", fontStyle: "italic" }}>{studyCard.keywords}</div>
+                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 11, color: "rgba(201,168,76,0.4)", letterSpacing: 1, marginBottom: 6 }}>KEYWORDS</div>
+                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: "rgba(201,168,76,0.7)", fontStyle: "italic" }}>{studyCard.keywords}</div>
               </div>
             )}
 
@@ -2531,17 +2702,17 @@ export default function App() {
               const suitData = MINOR_ARCANA_SUITS[studyCard.suit];
               return (
                 <div style={{ marginTop: 16 }}>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "rgba(201,168,76,0.4)", letterSpacing: 1, marginBottom: 10 }}>BUILDING BLOCKS</div>
+                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 11, color: "rgba(201,168,76,0.4)", letterSpacing: 1, marginBottom: 10 }}>BUILDING BLOCKS</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {rankTheme && (
                       <div style={{ padding: "12px 16px", borderRadius: 12, background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.12)", display: "flex", gap: 12, alignItems: "flex-start" }}>
-                        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "rgba(201,168,76,0.5)", letterSpacing: 1, minWidth: 52, paddingTop: 1 }}>{rank.toUpperCase()}</div>
-                        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(232,220,200,0.7)", fontWeight: 300, lineHeight: 1.5 }}>{rankTheme}</div>
+                        <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 11, color: "rgba(201,168,76,0.5)", letterSpacing: 1, minWidth: 52, paddingTop: 1 }}>{rank.toUpperCase()}</div>
+                        <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, color: "rgba(232,220,200,0.7)", fontWeight: 300, lineHeight: 1.5 }}>{rankTheme}</div>
                       </div>
                     )}
                     <div style={{ padding: "12px 16px", borderRadius: 12, background: `${suitData.color}0d`, border: `1px solid ${suitData.color}30`, display: "flex", gap: 12, alignItems: "flex-start" }}>
-                      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: suitData.color, letterSpacing: 1, minWidth: 52, paddingTop: 1, opacity: 0.8 }}>{studyCard.suit.toUpperCase()}</div>
-                      <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(232,220,200,0.7)", fontWeight: 300, lineHeight: 1.5 }}>{suitData.theme}</div>
+                      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 11, color: suitData.color, letterSpacing: 1, minWidth: 52, paddingTop: 1, opacity: 0.8 }}>{studyCard.suit.toUpperCase()}</div>
+                      <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, color: "rgba(232,220,200,0.7)", fontWeight: 300, lineHeight: 1.5 }}>{suitData.theme}</div>
                     </div>
                   </div>
                 </div>
@@ -2551,7 +2722,7 @@ export default function App() {
             {/* Card Connections */}
             {CARD_CONNECTIONS[studyCard.id] && CARD_CONNECTIONS[studyCard.id].length > 0 && (
               <div style={{ marginTop: 16 }}>
-                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "rgba(201,168,76,0.4)", letterSpacing: 1, marginBottom: 10 }}>CONNECTED CARDS</div>
+                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 11, color: "rgba(201,168,76,0.4)", letterSpacing: 1, marginBottom: 10 }}>CONNECTED CARDS</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {CARD_CONNECTIONS[studyCard.id].map((conn, i) => {
                     const linkedCard = ALL_CARDS.find(c => c.id === conn.id);
@@ -2569,10 +2740,10 @@ export default function App() {
                           fontSize: 16, flexShrink: 0,
                         }}>{CARD_SYMBOLS[linkedCard.id] || "✦"}</div>
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 500, color: "#e8dcc8" }}>{linkedCard.name}</div>
-                          <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", fontWeight: 300, fontStyle: "italic" }}>{conn.reason}</div>
+                          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 13, fontWeight: 500, color: "#e8dcc8" }}>{linkedCard.name}</div>
+                          <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", fontWeight: 300, fontStyle: "italic" }}>{conn.reason}</div>
                         </div>
-                        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.3)" }}>→</div>
+                        <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.3)" }}>→</div>
                       </div>
                     );
                   })}
@@ -2583,10 +2754,10 @@ export default function App() {
             {/* Personal Notes */}
             <div style={{ marginTop: 16 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "rgba(201,168,76,0.4)", letterSpacing: 1 }}>YOUR NOTES</div>
+                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 11, color: "rgba(201,168,76,0.4)", letterSpacing: 1 }}>YOUR NOTES</div>
                 {!editingNote && (
                   <button onClick={() => { setEditingNote(true); setNoteText(personalNotes[studyCard.id] || ""); }}
-                    style={{ background: "none", border: "none", fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.5)", cursor: "pointer", padding: "2px 6px" }}>
+                    style={{ background: "none", border: "none", fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.5)", cursor: "pointer", padding: "2px 6px" }}>
                     {personalNotes[studyCard.id] ? "✏ edit" : "+ add note"}
                   </button>
                 )}
@@ -2596,7 +2767,7 @@ export default function App() {
                   padding: 14, borderRadius: 12,
                   background: "rgba(139,92,246,0.04)", border: "1px solid rgba(139,92,246,0.12)",
                 }}>
-                  <div style={{ fontFamily: "'Crimson Text', serif", fontSize: 14, color: "rgba(232,220,200,0.7)", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: "rgba(232,220,200,0.7)", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
                     {personalNotes[studyCard.id]}
                   </div>
                 </div>
@@ -2604,7 +2775,7 @@ export default function App() {
               {!editingNote && !personalNotes[studyCard.id] && (
                 <div onClick={() => { setEditingNote(true); setNoteText(""); }}
                   style={{ padding: 14, borderRadius: 12, background: "rgba(201,168,76,0.02)", border: "1px dashed rgba(201,168,76,0.12)", cursor: "pointer", textAlign: "center" }}>
-                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.25)", fontWeight: 300 }}>
+                  <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.25)", fontWeight: 300 }}>
                     Tap to add personal associations, mnemonics, or reading notes...
                   </div>
                 </div>
@@ -2652,7 +2823,7 @@ export default function App() {
                     onClick={() => { if (prev) { setStudyCard(prev); setShowDescription(false); setEditingNote(false); setNoteText(personalNotes[prev.id] || ""); } }}
                   >
                     ← {prev ? prev.name : ""}
-                    <span className="kbd-hint" style={{ opacity: 0.4, fontSize: 9, display: "block", marginTop: 2, textTransform: "none", letterSpacing: 0, fontFamily: "'Raleway', sans-serif" }}>[←]</span>
+                    <span className="kbd-hint" style={{ opacity: 0.4, fontSize: 9, display: "block", marginTop: 2, textTransform: "none", letterSpacing: 0, fontFamily: "'Source Sans 3', sans-serif" }}>[←]</span>
                   </button>
                   <button
                     className="nav-btn nav-btn-ghost"
@@ -2660,7 +2831,7 @@ export default function App() {
                     onClick={() => { if (next) { setStudyCard(next); setShowDescription(false); setEditingNote(false); setNoteText(personalNotes[next.id] || ""); } }}
                   >
                     {next ? next.name : ""} →
-                    <span className="kbd-hint" style={{ opacity: 0.4, fontSize: 9, display: "block", marginTop: 2, textTransform: "none", letterSpacing: 0, fontFamily: "'Raleway', sans-serif" }}>[→]</span>
+                    <span className="kbd-hint" style={{ opacity: 0.4, fontSize: 9, display: "block", marginTop: 2, textTransform: "none", letterSpacing: 0, fontFamily: "'Source Sans 3', sans-serif" }}>[→]</span>
                   </button>
                 </div>
               );
@@ -2669,87 +2840,94 @@ export default function App() {
         )}
 
         {/* ═══ PROGRESS ═══ */}
-        {screen === "progress" && (
-          <div>
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 24, gap: 12 }}>
-              <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 14px", fontSize: 11 }} onClick={() => setScreen("home")}>← Back</button>
-              <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 18, fontWeight: 500, letterSpacing: 2, color: "#c9a84c" }}>Progress</h2>
-            </div>
+        {screen === "home" && homeTab === "progress" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+            <SectionHead title="Progress" trailing={
+              <SectionNote>
+                {unlockedAchievements > 0
+                  ? `${roman(unlockedAchievements)} / ${roman(achievements.length)} RITES`
+                  : `${roman(achievements.length)} RITES`}
+              </SectionNote>
+            } />
 
-            {/* Deck Mastery Hero */}
+            {/* Deck mastery, given the space it deserves */}
             {(() => {
               const masteredTotal = availableCards.filter(c => srsData[c.id] && getMasteryLevel(srsData[c.id]).level >= 3).length;
               const pct = Math.round((masteredTotal / availableCards.length) * 100);
               return (
-                <div style={{
-                  padding: 24, marginBottom: 24, borderRadius: 18, textAlign: "center",
-                  background: "linear-gradient(160deg, rgba(201,168,76,0.1), rgba(201,168,76,0.02))",
-                  border: "1px solid rgba(201,168,76,0.2)",
-                }}>
-                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.4)", letterSpacing: 2, marginBottom: 8 }}>DECK MASTERY</div>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 44, fontWeight: 600, color: "#c9a84c", lineHeight: 1, marginBottom: 4 }}>{pct}%</div>
-                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.5)", fontWeight: 300, marginBottom: 14 }}>
+                <GiltPanel inner={{ padding: "24px 20px 22px", gap: 14, alignItems: "center" }}>
+                  <CornerFlourish side="left" />
+                  <CornerFlourish side="right" />
+                  <div style={{ fontFamily: FONT_SANS, fontSize: 10, color: C.goldDim, letterSpacing: ".22em" }}>DECK MASTERY</div>
+                  <div style={{ fontFamily: FONT_SERIF, fontSize: 52, fontWeight: 600, color: C.goldPale, lineHeight: 1 }}>{pct}%</div>
+                  <div style={{ fontFamily: FONT_SANS, fontSize: 13, color: C.textDim }}>
                     {masteredTotal} of {availableCards.length} cards mastered
                   </div>
-                  {/* Progress bar */}
-                  <div style={{ height: 6, borderRadius: 3, background: "rgba(201,168,76,0.08)", overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg, rgba(201,168,76,0.5), rgba(201,168,76,0.8))", borderRadius: 3, transition: "width 0.6s ease" }} />
+                  <div style={{ width: "100%", height: 6, borderRadius: 3, background: C.ruleWarm, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${pct}%`, background: S.segment, borderRadius: 3, transition: "width 0.6s ease" }} />
                   </div>
-                </div>
+                </GiltPanel>
               );
             })()}
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {[
-                { label: "Cards Seen", value: stats.attempted, total: stats.total },
-                { label: "Struggling", value: stats.struggling, color: "#dc3545" },
-                { label: "Best Streak", value: bestStreak, color: "#c9a84c" },
-                { label: "Sessions", value: totalSessions, color: "#c9a84c" },
+                { label: "CARDS SEEN", value: `${stats.attempted}/${stats.total}`, color: C.goldLight },
+                { label: "STRUGGLING", value: stats.struggling, color: stats.struggling > 0 ? "#D6A08A" : C.goldLight },
+                { label: "BEST RUN", value: bestStreak, color: C.goldLight },
+                { label: "SITTINGS", value: totalSessions, color: C.goldLight },
               ].map(s => (
-                <div key={s.label} style={{ padding: 16, background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.1)", borderRadius: 12, textAlign: "center" }}>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 22, color: s.color || "#c9a84c", fontWeight: 600 }}>{s.value}{s.total ? `/${s.total}` : ""}</div>
-                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.5)", letterSpacing: 1, marginTop: 4 }}>{s.label.toUpperCase()}</div>
+                <div key={s.label} style={{
+                  padding: "14px 12px", borderRadius: 14, textAlign: "center", background: S.plaque,
+                  border: `1px solid ${C.ruleMid}`, boxShadow: "inset 0 1px 0 rgba(201,163,78,.12)",
+                }}>
+                  <div style={{ fontFamily: FONT_SERIF, fontSize: 24, lineHeight: 1, color: s.color }}>{s.value}</div>
+                  <div style={{ fontFamily: FONT_SANS, fontSize: 10, color: C.goldDim, letterSpacing: ".16em", marginTop: 5 }}>{s.label}</div>
                 </div>
               ))}
             </div>
 
             {/* Achievements */}
-            <div style={{ marginBottom: 24 }}>
-              <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: 12, letterSpacing: 2, color: "rgba(201,168,76,0.5)", marginBottom: 12 }}>
-                ACHIEVEMENTS <span style={{ color: "rgba(201,168,76,0.3)" }}>· {unlockedAchievements}/{achievements.length}</span>
-              </h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <SectionHead title="Rites earned" trailing={
+                <SectionNote>{roman(unlockedAchievements)} / {roman(achievements.length)}</SectionNote>
+              } />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 {achievements.map(a => (
                   <div key={a.id} style={{
-                    padding: 12, borderRadius: 12, display: "flex", alignItems: "center", gap: 10,
-                    background: a.unlocked ? "rgba(201,168,76,0.07)" : "rgba(255,255,255,0.02)",
-                    border: `1px solid ${a.unlocked ? "rgba(201,168,76,0.2)" : "rgba(255,255,255,0.04)"}`,
-                    opacity: a.unlocked ? 1 : 0.5,
+                    padding: "12px 13px", borderRadius: 12, display: "flex", alignItems: "center", gap: 11,
+                    background: a.unlocked ? S.panelFlat : "rgba(255,255,255,0.014)",
+                    border: `1px solid ${a.unlocked ? C.ruleGold : C.rule}`,
+                    opacity: a.unlocked ? 1 : 0.55,
                   }}>
                     <div style={{
-                      fontSize: 20, flexShrink: 0,
-                      filter: a.unlocked ? "drop-shadow(0 0 6px rgba(201,168,76,0.3))" : "grayscale(1)",
-                    }}>{a.unlocked ? a.icon : "🔒"}</div>
+                      flex: "0 0 auto", width: 30, height: 30, borderRadius: "50%",
+                      border: `1px solid ${a.unlocked ? C.frame : C.rule}`,
+                      background: a.unlocked ? "#1A1426" : C.plumChip,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <Icon name={a.unlocked ? a.glyph : "lock"} size={15} color={a.unlocked ? C.goldBright : C.goldFaint} />
+                    </div>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, fontWeight: 500, color: a.unlocked ? "#e8dcc8" : "rgba(201,168,76,0.4)" }}>{a.name}</div>
-                      <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.4)", fontWeight: 300, lineHeight: 1.3 }}>{a.desc}</div>
+                      <div style={{ fontFamily: FONT_SERIF, fontSize: 15, lineHeight: 1.15, color: a.unlocked ? C.goldLight : C.goldDim }}>{a.name}</div>
+                      <div style={{ fontFamily: FONT_SANS, fontSize: 10.5, color: C.goldDim, lineHeight: 1.35, marginTop: 2 }}>{a.desc}</div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Mastery Grids */}
-            <div style={{ marginBottom: 16 }}>
-              <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: 12, letterSpacing: 2, color: "rgba(201,168,76,0.5)", marginBottom: 12 }}>MAJOR ARCANA</h3>
+            {/* Mastery grids */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <SectionHead title="Major Arcana" trailing={<SectionNote>{roman(MAJOR_ARCANA.length)} CARDS</SectionNote>} />
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(36px, 1fr))", gap: 6 }}>
                 {MAJOR_ARCANA.map(card => {
                   const srs = getCardSRS(card.id); const mastery = getMasteryLevel(srs);
-                  const colors = ["rgba(255,255,255,0.05)", "rgba(220,53,69,0.3)", "rgba(201,168,76,0.2)", "rgba(76,175,80,0.3)", "rgba(201,168,76,0.5)"];
+                  const colors = ["rgba(255,255,255,0.05)", "rgba(214,160,138,0.28)", "rgba(201,163,78,0.22)", "rgba(127,169,138,0.32)", "rgba(227,198,127,0.5)"];
                   return (
                     <div key={card.id} title={`${card.name} — ${mastery.label}`}
                       className={mastery.level >= 4 ? "mastered-tile" : ""}
-                      style={{ width: "100%", aspectRatio: "1", borderRadius: 6, background: colors[mastery.level], display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontFamily: "'Cinzel', serif", color: mastery.level > 0 ? "#e8dcc8" : "rgba(255,255,255,0.2)", fontWeight: 600, cursor: "pointer" }}
+                      style={{ width: "100%", aspectRatio: "1", borderRadius: 6, background: colors[mastery.level], border: `1px solid ${mastery.level > 0 ? C.ruleGold : "transparent"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontFamily: FONT_SERIF, color: mastery.level > 0 ? C.goldPale : "rgba(255,255,255,0.2)", fontWeight: 600, cursor: "pointer" }}
                       onClick={() => { setStudyCard(card); setShowDescription(false); setEditingNote(false); setNoteText(personalNotes[card.id] || ""); setScreen("study"); }}>
                       {card.numeral}
                     </div>
@@ -2757,32 +2935,47 @@ export default function App() {
                 })}
               </div>
             </div>
+
             {unlockedMinor && Object.keys(MINOR_ARCANA_SUITS).map(suit => (
-              <div key={suit} style={{ marginBottom: 16 }}>
-                <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: 12, letterSpacing: 2, color: MINOR_ARCANA_SUITS[suit].color, marginBottom: 10, opacity: 0.7 }}>{suit.toUpperCase()}</h3>
+              <div key={suit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <SectionHead title={suit} trailing={
+                  <SectionNote>
+                    <Icon name={suit === "Wands" ? "flame" : suit === "Cups" ? "droplet" : suit === "Swords" ? "wind" : "coin"} size={11} color={MINOR_ARCANA_SUITS[suit].color} />
+                    {MINOR_ARCANA_SUITS[suit].element.toUpperCase()}
+                  </SectionNote>
+                } />
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(32px, 1fr))", gap: 4 }}>
                   {ALL_MINOR.filter(c => c.suit === suit).map(card => {
                     const srs = getCardSRS(card.id); const mastery = getMasteryLevel(srs);
-                    const colors = ["rgba(255,255,255,0.05)", "rgba(220,53,69,0.3)", "rgba(201,168,76,0.2)", "rgba(76,175,80,0.3)", "rgba(201,168,76,0.5)"];
+                    const colors = ["rgba(255,255,255,0.05)", "rgba(214,160,138,0.28)", "rgba(201,163,78,0.22)", "rgba(127,169,138,0.32)", "rgba(227,198,127,0.5)"];
                     const n = card.name.split(" ")[0];
                     const numMap = { "Ace": "A", "Two": "2", "Three": "3", "Four": "4", "Five": "5", "Six": "6", "Seven": "7", "Eight": "8", "Nine": "9", "Ten": "10", "Page": "P", "Knight": "Kn", "Queen": "Q", "King": "K" };
                     const label = numMap[n] || n.charAt(0);
                     return <div key={card.id} title={`${card.name} — ${mastery.label}`}
                       className={mastery.level >= 4 ? "mastered-tile" : ""}
-                      style={{ width: "100%", aspectRatio: "1", borderRadius: 4, background: colors[mastery.level], cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontFamily: "'Cinzel', serif", fontWeight: 600, color: mastery.level > 0 ? "#e8dcc8" : "rgba(255,255,255,0.2)" }}
+                      style={{ width: "100%", aspectRatio: "1", borderRadius: 4, background: colors[mastery.level], border: `1px solid ${mastery.level > 0 ? C.ruleGold : "transparent"}`, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontFamily: FONT_SERIF, fontWeight: 600, color: mastery.level > 0 ? C.goldPale : "rgba(255,255,255,0.2)" }}
                       onClick={() => { setStudyCard(card); setShowDescription(false); setEditingNote(false); setNoteText(personalNotes[card.id] || ""); setScreen("study"); }}>{label}</div>;
                   })}
                 </div>
               </div>
             ))}
-            <div style={{ marginTop: 20, padding: 14, background: "rgba(201,168,76,0.04)", borderRadius: 12, border: "1px solid rgba(201,168,76,0.08)" }}>
-              <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", lineHeight: 1.6, fontWeight: 300 }}>
-                <span style={{ color: "rgba(220,53,69,0.5)" }}>■</span> Struggling &nbsp;
-                <span style={{ color: "rgba(201,168,76,0.4)" }}>■</span> Learning &nbsp;
-                <span style={{ color: "rgba(76,175,80,0.5)" }}>■</span> Confident &nbsp;
-                <span style={{ color: "rgba(201,168,76,0.7)" }}>■</span> Mastered ✦
+
+            <div style={{ padding: "13px 16px", background: S.panelFlat, borderRadius: 14, border: `1px solid ${C.rule}` }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 16px", fontFamily: FONT_SANS, fontSize: 11.5, color: C.goldDim }}>
+                {[
+                  { c: "rgba(214,160,138,0.7)", l: "Struggling" },
+                  { c: "rgba(201,163,78,0.6)", l: "Learning" },
+                  { c: "rgba(127,169,138,0.8)", l: "Confident" },
+                  { c: C.goldBright, l: "Mastered" },
+                ].map(k => (
+                  <span key={k.l} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ width: 9, height: 9, borderRadius: 2, background: k.c }} />{k.l}
+                  </span>
+                ))}
               </div>
             </div>
+
+            <Finial />
           </div>
         )}
 
@@ -2790,8 +2983,8 @@ export default function App() {
         {screen === "reference" && (
           <div>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 16, gap: 12 }}>
-              <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 14px", fontSize: 11 }} onClick={() => setScreen("home")}>← Back</button>
-              <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 18, fontWeight: 500, letterSpacing: 2, color: "#c9a84c" }}>Quick Reference</h2>
+              <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 14px", fontSize: 11 }} onClick={() => goTab("practice")}>← Back</button>
+              <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 500, letterSpacing: 2, color: "#c9a84c" }}>Quick Reference</h2>
             </div>
 
             {/* Search box */}
@@ -2804,7 +2997,7 @@ export default function App() {
               style={{
                 width: "100%", padding: "14px 16px", marginBottom: 16,
                 background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.2)",
-                borderRadius: 12, color: "#e8dcc8", fontFamily: "'Raleway', sans-serif",
+                borderRadius: 12, color: "#e8dcc8", fontFamily: "'Source Sans 3', sans-serif",
                 fontSize: 15, outline: "none",
               }}
             />
@@ -2831,7 +3024,7 @@ export default function App() {
                 return (
                   <div style={{ textAlign: "center", padding: 40 }}>
                     <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.5 }}>🔮</div>
-                    <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.4)", fontWeight: 300 }}>
+                    <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.4)", fontWeight: 300 }}>
                       No cards match "{refSearch}"
                     </div>
                   </div>
@@ -2840,7 +3033,7 @@ export default function App() {
 
               return (
                 <div>
-                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.3)", marginBottom: 10, letterSpacing: 1 }}>
+                  <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.3)", marginBottom: 10, letterSpacing: 1 }}>
                     {results.length} CARD{results.length !== 1 ? "S" : ""}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -2859,7 +3052,7 @@ export default function App() {
                             <div style={{
                               width: 32, height: 32, borderRadius: 8, flexShrink: 0,
                               background: `${accent}18`, display: "flex", alignItems: "center", justifyContent: "center",
-                              fontSize: card.id < 22 ? 16 : 11, color: accent, fontFamily: "'Cinzel', serif", fontWeight: 600,
+                              fontSize: card.id < 22 ? 16 : 11, color: accent, fontFamily: "'Cormorant Garamond', serif", fontWeight: 600,
                             }}>
                               {card.id < 22 ? <span className="arcana-glyph" style={{ fontSize: 16 }}>{CARD_SYMBOLS[card.id] || "✦"}</span> : (() => {
                                 const n = card.name.split(" ")[0];
@@ -2868,42 +3061,42 @@ export default function App() {
                               })()}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontFamily: "'Cinzel', serif", fontSize: 14, fontWeight: 500, color: "#e8dcc8" }}>{card.name}</div>
+                              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, fontWeight: 500, color: "#e8dcc8" }}>{card.name}</div>
                               {!expanded && (
-                                <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", fontWeight: 300, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", fontWeight: 300, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                   {card.upright.slice(0, 3).join(", ")}
                                 </div>
                               )}
                             </div>
-                            <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.3)" }}>{expanded ? "▲" : "▼"}</div>
+                            <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.3)" }}>{expanded ? "▲" : "▼"}</div>
                           </div>
 
                           {/* Expanded detail */}
                           {expanded && (
                             <div style={{ padding: "0 14px 14px 14px", animation: "fadeUp 0.2s ease-out" }}>
                               {card.description && (
-                                <div style={{ fontFamily: "'Crimson Text', serif", fontSize: 13, color: "rgba(232,220,200,0.6)", lineHeight: 1.6, fontStyle: "italic", marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid rgba(201,168,76,0.08)" }}>
+                                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 13, color: "rgba(232,220,200,0.6)", lineHeight: 1.6, fontStyle: "italic", marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid rgba(201,168,76,0.08)" }}>
                                   {card.description}
                                 </div>
                               )}
                               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: personalNotes[card.id] ? 12 : 0 }}>
                                 <div>
-                                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "rgba(76,175,80,0.6)", letterSpacing: 1, marginBottom: 6 }}>↑ UPRIGHT</div>
+                                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 10, color: "rgba(76,175,80,0.6)", letterSpacing: 1, marginBottom: 6 }}>↑ UPRIGHT</div>
                                   {card.upright.map((m, i) => (
-                                    <div key={i} style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(232,220,200,0.7)", marginBottom: 3, fontWeight: 300 }}>{m}</div>
+                                    <div key={i} style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 12, color: "rgba(232,220,200,0.7)", marginBottom: 3, fontWeight: 300 }}>{m}</div>
                                   ))}
                                 </div>
                                 <div>
-                                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "rgba(220,53,69,0.6)", letterSpacing: 1, marginBottom: 6 }}>↓ REVERSED</div>
+                                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 10, color: "rgba(220,53,69,0.6)", letterSpacing: 1, marginBottom: 6 }}>↓ REVERSED</div>
                                   {card.reversed.map((m, i) => (
-                                    <div key={i} style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(232,220,200,0.7)", marginBottom: 3, fontWeight: 300 }}>{m}</div>
+                                    <div key={i} style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 12, color: "rgba(232,220,200,0.7)", marginBottom: 3, fontWeight: 300 }}>{m}</div>
                                   ))}
                                 </div>
                               </div>
                               {personalNotes[card.id] && (
                                 <div style={{ padding: 10, borderRadius: 8, background: "rgba(139,92,246,0.04)", border: "1px solid rgba(139,92,246,0.12)", marginBottom: 12 }}>
-                                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 9, color: "rgba(139,92,246,0.5)", letterSpacing: 1, marginBottom: 4 }}>YOUR NOTE</div>
-                                  <div style={{ fontFamily: "'Crimson Text', serif", fontSize: 13, color: "rgba(232,220,200,0.7)", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{personalNotes[card.id]}</div>
+                                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 9, color: "rgba(139,92,246,0.5)", letterSpacing: 1, marginBottom: 4 }}>YOUR NOTE</div>
+                                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 13, color: "rgba(232,220,200,0.7)", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{personalNotes[card.id]}</div>
                                 </div>
                               )}
                               <button className="nav-btn nav-btn-ghost" style={{ width: "100%", fontSize: 10, padding: "8px 12px" }}
@@ -2921,7 +3114,11 @@ export default function App() {
             })()}
           </div>
         )}
+          </div>
+        </div>
       </div>
+
+      {showChrome && <TabBar variant="bottom" active={activeTab} onSelect={goTab} />}
     </div>
   );
 }

@@ -331,7 +331,7 @@ export default function VoiceDrillMode({
       <div style={{ display: "flex", alignItems: "center", marginBottom: 16, gap: 12 }}>
         <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 14px", fontSize: 11 }}
           onClick={() => { fns.current.finish(); onExit(); }}>← Back</button>
-        <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 18, fontWeight: 500, letterSpacing: 2, color: GOLD }}>
+        <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 500, letterSpacing: 2, color: GOLD }}>
           🎙 Voice Drill · Sprachmodus
         </h2>
       </div>
@@ -344,8 +344,8 @@ export default function VoiceDrillMode({
         {title}
         <div style={{ padding: 20, background: "rgba(201,168,76,0.05)", border: "1px solid rgba(201,168,76,0.15)", borderRadius: 16, textAlign: "center" }}>
           <div style={{ fontSize: 36, marginBottom: 12 }}>🦉</div>
-          <div style={{ fontFamily: "'Cinzel', serif", fontSize: 16, color: CREAM, marginBottom: 8 }}>Voice Drill needs Chrome</div>
-          <p style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.6)", lineHeight: 1.6, fontWeight: 300 }}>
+          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 16, color: CREAM, marginBottom: 8 }}>Voice Drill needs Chrome</div>
+          <p style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.6)", lineHeight: 1.6, fontWeight: 300 }}>
             This ears-first mode relies on the Web Speech API, which today only works reliably in
             Chromium-based browsers (Chrome, Edge, Brave). Open Arcana Academy there to study hands-free.
             {" "}Every other mode works everywhere.
@@ -417,7 +417,7 @@ function ReadyView({
   return (
     <div>
       <div style={{ padding: "20px", background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.12)", borderRadius: 16, marginBottom: 16 }}>
-        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: CREAM, lineHeight: 1.7, fontWeight: 300 }}>
+        <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, color: CREAM, lineHeight: 1.7, fontWeight: 300 }}>
           A hands-free recall loop. I speak a card, you recall its meaning, then say
           <b style={{ color: GOLD }}> "aufdecken"</b> to hear the answer. Grade by voice — you'll
           never need the screen. Best studied while your hands are busy.
@@ -426,7 +426,7 @@ function ReadyView({
 
       {/* Recall mode */}
       <div style={{ marginBottom: 16 }}>
-        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.35)", letterSpacing: 1, marginBottom: 8 }}>RECALL STYLE</div>
+        <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.35)", letterSpacing: 1, marginBottom: 8 }}>RECALL STYLE</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {modes.map((m) => {
             const active = recallMode === m.key;
@@ -439,8 +439,8 @@ function ReadyView({
               }}>
                 <span style={{ fontSize: 20 }}>{m.icon}</span>
                 <div>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 14, color: active ? "#e8dcc8" : "rgba(232,220,200,0.7)", fontWeight: 500 }}>{m.title}</div>
-                  <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11.5, color: "rgba(201,168,76,0.5)", fontWeight: 300 }}>{m.desc}</div>
+                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: active ? "#e8dcc8" : "rgba(232,220,200,0.7)", fontWeight: 500 }}>{m.title}</div>
+                  <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11.5, color: "rgba(201,168,76,0.5)", fontWeight: 300 }}>{m.desc}</div>
                 </div>
               </div>
             );
@@ -450,7 +450,7 @@ function ReadyView({
 
       {/* Deck */}
       <div style={{ marginBottom: 14 }}>
-        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.35)", letterSpacing: 1, marginBottom: 8 }}>CARD POOL</div>
+        <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.35)", letterSpacing: 1, marginBottom: 8 }}>CARD POOL</div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {deckOptions.map((f) => (
             <button key={f.key} className={`filter-btn ${deck === f.key ? "active" : ""}`} onClick={() => setDeck(f.key)}>{f.label}</button>
@@ -460,7 +460,7 @@ function ReadyView({
 
       {/* Orientation */}
       <div style={{ marginBottom: 16 }}>
-        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.35)", letterSpacing: 1, marginBottom: 8 }}>ORIENTATION</div>
+        <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.35)", letterSpacing: 1, marginBottom: 8 }}>ORIENTATION</div>
         <div style={{ display: "flex", gap: 6 }}>
           {[{ key: "both", label: "Both" }, { key: "upright", label: "↑ Upright" }, { key: "reversed", label: "↓ Reversed" }].map((f) => (
             <button key={f.key} className={`filter-btn ${orientation === f.key ? "active" : ""}`} onClick={() => setOrientation(f.key)}>{f.label}</button>
@@ -471,14 +471,14 @@ function ReadyView({
       <CommandCheatSheet spoken={recallMode === "spoken"} />
 
       {voicesReady && !hasEnglishVoice && (
-        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(220,53,69,0.7)", margin: "12px 2px", fontWeight: 300 }}>
+        <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(220,53,69,0.7)", margin: "12px 2px", fontWeight: 300 }}>
           ⚠ No English voice found on this device — falling back to the system default. Card names may sound off.
         </div>
       )}
       <button className="nav-btn nav-btn-primary" style={{ width: "100%", padding: "16px", fontSize: 15, marginTop: 14 }} onClick={onBegin}>
         ✦ Begin Drill ✦
       </button>
-      <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", textAlign: "center", marginTop: 10, fontWeight: 300 }}>
+      <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", textAlign: "center", marginTop: 10, fontWeight: 300 }}>
         Your browser will ask for microphone access.
       </div>
     </div>
@@ -497,15 +497,15 @@ function CommandCheatSheet({ spoken }) {
   ];
   return (
     <div style={{ padding: "16px 18px", background: "rgba(201,168,76,0.03)", border: "1px solid rgba(201,168,76,0.1)", borderRadius: 14 }}>
-      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, letterSpacing: 1, color: "rgba(201,168,76,0.7)", marginBottom: 10 }}>VOICE COMMANDS</div>
+      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 12, letterSpacing: 1, color: "rgba(201,168,76,0.7)", marginBottom: 10 }}>VOICE COMMANDS</div>
       {rows.map(([cmd, desc]) => (
-        <div key={cmd} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "4px 0", fontFamily: "'Raleway', sans-serif", fontSize: 12.5 }}>
+        <div key={cmd} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "4px 0", fontFamily: "'Source Sans 3', sans-serif", fontSize: 12.5 }}>
           <span style={{ color: GOLD, fontWeight: 400 }}>{cmd}</span>
           <span style={{ color: "rgba(201,168,76,0.45)", fontWeight: 300, textAlign: "right" }}>{desc}</span>
         </div>
       ))}
       {spoken && (
-        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", marginTop: 8, fontWeight: 300, lineHeight: 1.5 }}>
+        <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", marginTop: 8, fontWeight: 300, lineHeight: 1.5 }}>
           Just say the meanings out loud after the card name, then “aufdecken”.
         </div>
       )}
@@ -527,7 +527,7 @@ function StatusPill({ paused, listening, step }) {
         animation: (listening && !paused && !speaking) ? "pulse 1.4s ease-in-out infinite" : (speaking ? "breathe 1.2s ease-in-out infinite" : "none"),
         boxShadow: `0 0 10px ${dot}`,
       }} />
-      <span style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, letterSpacing: 1, color, fontWeight: 400 }}>{label}</span>
+      <span style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 12, letterSpacing: 1, color, fontWeight: 400 }}>{label}</span>
     </div>
   );
 }
@@ -545,10 +545,10 @@ function BigTap({ label, sub, onClick, tone = "gold", disabled }) {
       background: disabled ? "rgba(201,168,76,0.03)" : t.bg,
       border: `1px solid ${disabled ? "rgba(201,168,76,0.1)" : t.border}`,
       color: disabled ? "rgba(201,168,76,0.25)" : t.color,
-      fontFamily: "'Cinzel', serif", fontSize: 15, fontWeight: 500, transition: "all 0.2s ease",
+      fontFamily: "'Cormorant Garamond', serif", fontSize: 15, fontWeight: 500, transition: "all 0.2s ease",
     }}>
       {label}
-      {sub && <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, fontWeight: 300, opacity: 0.7, marginTop: 3, textTransform: "none", letterSpacing: 0 }}>{sub}</div>}
+      {sub && <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 10, fontWeight: 300, opacity: 0.7, marginTop: 3, textTransform: "none", letterSpacing: 0 }}>{sub}</div>}
     </button>
   );
 }
@@ -565,7 +565,7 @@ function RunningView({
     <div>
       {micError === "mic-denied" && (
         <div style={{ padding: 16, background: `${RED}0.08)`, border: `1px solid ${RED}0.3)`, borderRadius: 12, marginBottom: 14 }}>
-          <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(220,53,69,0.9)", lineHeight: 1.6 }}>
+          <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, color: "rgba(220,53,69,0.9)", lineHeight: 1.6 }}>
             🎤 Microphone access is blocked. Enable it in your browser's site settings, then tap below.
             You can still grade with the buttons in the meantime.
           </div>
@@ -574,11 +574,11 @@ function RunningView({
       )}
 
       <div style={{ textAlign: "center", padding: "18px 0 10px" }}>
-        <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, letterSpacing: 2, color: "rgba(201,168,76,0.4)", marginBottom: 10 }}>
+        <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, letterSpacing: 2, color: "rgba(201,168,76,0.4)", marginBottom: 10 }}>
           {reviewed} REVIEWED {card && card.isUpright === false ? "· REVERSED" : ""}
         </div>
         <div style={{
-          fontFamily: "'Cinzel', serif", fontWeight: 600, letterSpacing: 1, lineHeight: 1.15,
+          fontFamily: "'Cormorant Garamond', serif", fontWeight: 600, letterSpacing: 1, lineHeight: 1.15,
           fontSize: card && card.card.name.length > 16 ? 30 : 38,
           background: "linear-gradient(135deg, #c9a84c, #e8dcc8, #c9a84c)", backgroundSize: "200%",
           WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
@@ -599,7 +599,7 @@ function RunningView({
               const hit = liveMatched.includes(m);
               return (
                 <span key={m} style={{
-                  padding: "5px 11px", borderRadius: 16, fontFamily: "'Raleway', sans-serif", fontSize: 12,
+                  padding: "5px 11px", borderRadius: 16, fontFamily: "'Source Sans 3', sans-serif", fontSize: 12,
                   background: hit ? `${GREEN}0.15)` : "rgba(201,168,76,0.05)",
                   border: `1px solid ${hit ? `${GREEN}0.5)` : "rgba(201,168,76,0.12)"}`,
                   color: hit ? "#d4f5d6" : "rgba(201,168,76,0.35)",
@@ -608,7 +608,7 @@ function RunningView({
               );
             })}
           </div>
-          <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", textAlign: "center", marginTop: 8, fontWeight: 300 }}>
+          <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", textAlign: "center", marginTop: 8, fontWeight: 300 }}>
             {liveMatched.length} of {meanings.length} recalled — say “aufdecken” when done
           </div>
         </div>
@@ -624,11 +624,11 @@ function RunningView({
         {revealed ? (
           <>
             {spoken && scoreResult && (
-              <div style={{ fontFamily: "'Cinzel', serif", fontSize: 13, letterSpacing: 1, color: pendingGrade === "correct" ? "rgba(76,175,80,0.9)" : "rgba(220,53,69,0.85)", marginBottom: 10 }}>
+              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 13, letterSpacing: 1, color: pendingGrade === "correct" ? "rgba(76,175,80,0.9)" : "rgba(220,53,69,0.85)", marginBottom: 10 }}>
                 YOU RECALLED {scoreResult.matched.length} / {scoreResult.total}
               </div>
             )}
-            <div style={{ fontFamily: "'Crimson Text', serif", fontSize: 17, color: CREAM, lineHeight: 1.6 }}>
+            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 17, color: CREAM, lineHeight: 1.6 }}>
               {spoken && scoreResult
                 ? meanings.map((m) => {
                     const hit = scoreResult.matched.some((x) => x.meaning === m);
@@ -636,13 +636,13 @@ function RunningView({
                   })
                 : meanings.join(" · ")}
             </div>
-            <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.55)", marginTop: 8, fontStyle: "italic", fontWeight: 300 }}>
+            <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.55)", marginTop: 8, fontStyle: "italic", fontWeight: 300 }}>
               {card.card.keywords}
             </div>
           </>
         ) : (
           !(spoken && step === "listen-answer") && (
-            <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.35)", textAlign: "center", paddingTop: 18, fontWeight: 300 }}>
+            <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.35)", textAlign: "center", paddingTop: 18, fontWeight: 300 }}>
               Recall the meaning, then say “aufdecken”
             </div>
           )
@@ -664,7 +664,7 @@ function RunningView({
           </div>
         ) : (
           <div style={{ marginBottom: 10 }}>
-            <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 12, color: GOLD, textAlign: "center", marginBottom: 8, letterSpacing: 1 }}>
+            <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 12, color: GOLD, textAlign: "center", marginBottom: 8, letterSpacing: 1 }}>
               How confident? — sicher · wackelig · geraten
             </div>
             <div style={{ display: "flex", gap: 8 }}>
@@ -695,7 +695,7 @@ function RunningView({
         <button className="nav-btn nav-btn-ghost" style={{ flex: 1, padding: "10px", fontSize: 11, borderColor: `${RED}0.25)`, color: "rgba(220,53,69,0.7)" }} onClick={onStop}>■ Stopp</button>
       </div>
 
-      <div style={{ marginTop: 16, textAlign: "center", fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.35)", fontWeight: 300, minHeight: 16 }}>
+      <div style={{ marginTop: 16, textAlign: "center", fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.35)", fontWeight: 300, minHeight: 16 }}>
         {lastHeard ? <>heard: “<span style={{ color: "rgba(201,168,76,0.6)" }}>{lastHeard}</span>”</> : " "}
       </div>
     </div>
@@ -720,11 +720,11 @@ function SummaryView({ items, modeStats, onAgain, onHome }) {
     <div>
       <div style={{ textAlign: "center", marginBottom: 20 }}>
         <div style={{ fontSize: 34, marginBottom: 8 }}>✦</div>
-        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 20, letterSpacing: 2, color: GOLD }}>Session Complete</div>
+        <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, letterSpacing: 2, color: GOLD }}>Session Complete</div>
       </div>
 
       {reviewed === 0 ? (
-        <div style={{ textAlign: "center", fontFamily: "'Raleway', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.6)", marginBottom: 20, fontWeight: 300 }}>
+        <div style={{ textAlign: "center", fontFamily: "'Source Sans 3', sans-serif", fontSize: 13, color: "rgba(201,168,76,0.6)", marginBottom: 20, fontWeight: 300 }}>
           No cards graded this session.
         </div>
       ) : (
@@ -737,13 +737,13 @@ function SummaryView({ items, modeStats, onAgain, onHome }) {
 
           {hasConfidence && (
             <div style={{ padding: "16px 18px", background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.12)", borderRadius: 14, marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, letterSpacing: 1, color: "rgba(201,168,76,0.7)", marginBottom: 12 }}>CALIBRATION — this session</div>
+              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 12, letterSpacing: 1, color: "rgba(201,168,76,0.7)", marginBottom: 12 }}>CALIBRATION — this session</div>
               {buckets.map(({ c, total, correct: cc }) => {
                 const m = CONF_META[c];
                 const pct = total ? Math.round((cc / total) * 100) : 0;
                 return (
                   <div key={c} style={{ marginBottom: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'Raleway', sans-serif", fontSize: 12.5, marginBottom: 4 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'Source Sans 3', sans-serif", fontSize: 12.5, marginBottom: 4 }}>
                       <span style={{ color: CREAM }}>{m.label} <span style={{ color: "rgba(201,168,76,0.4)" }}>· {m.sub}</span></span>
                       <span style={{ color: "rgba(201,168,76,0.6)" }}>{total ? `${cc}/${total} · ${pct}%` : "—"}</span>
                     </div>
@@ -754,11 +754,11 @@ function SummaryView({ items, modeStats, onAgain, onHome }) {
                 );
               })}
               {unspecified > 0 && (
-                <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.35)", marginTop: 6, fontWeight: 300 }}>
+                <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.35)", marginTop: 6, fontWeight: 300 }}>
                   {unspecified} graded without a stated confidence
                 </div>
               )}
-              <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", marginTop: 10, lineHeight: 1.5, fontWeight: 300 }}>
+              <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.4)", marginTop: 10, lineHeight: 1.5, fontWeight: 300 }}>
                 High accuracy on “geraten” means you know more than you think. Low accuracy on “sicher” flags overconfidence.
               </div>
             </div>
@@ -766,7 +766,7 @@ function SummaryView({ items, modeStats, onAgain, onHome }) {
 
           {(voiceLifetime || quizLifetime) && (
             <div style={{ padding: "14px 18px", background: "rgba(201,168,76,0.03)", border: "1px solid rgba(201,168,76,0.1)", borderRadius: 14, marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, letterSpacing: 1, color: "rgba(201,168,76,0.7)", marginBottom: 10 }}>MODE COMPARISON — all time</div>
+              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 12, letterSpacing: 1, color: "rgba(201,168,76,0.7)", marginBottom: 10 }}>MODE COMPARISON — all time</div>
               <ModeRow name="🎙 Voice" stats={voiceLifetime} />
               <ModeRow name="🃏 Quiz" stats={quizLifetime} />
             </div>
@@ -785,8 +785,8 @@ function SummaryView({ items, modeStats, onAgain, onHome }) {
 function StatTile({ big, label }) {
   return (
     <div style={{ flex: 1, padding: "14px 8px", background: "rgba(201,168,76,0.05)", border: "1px solid rgba(201,168,76,0.12)", borderRadius: 12, textAlign: "center" }}>
-      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 22, color: GOLD, fontWeight: 600 }}>{big}</div>
-      <div style={{ fontFamily: "'Raleway', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.5)", letterSpacing: 0.5, marginTop: 4, fontWeight: 300 }}>{label}</div>
+      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, color: GOLD, fontWeight: 600 }}>{big}</div>
+      <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 10, color: "rgba(201,168,76,0.5)", letterSpacing: 0.5, marginTop: 4, fontWeight: 300 }}>{label}</div>
     </div>
   );
 }
@@ -796,7 +796,7 @@ function ModeRow({ name, stats }) {
   const correct = stats?.correct || 0;
   const pct = reviewed ? Math.round((correct / reviewed) * 100) : 0;
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'Raleway', sans-serif", fontSize: 12.5, padding: "4px 0", color: CREAM }}>
+    <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'Source Sans 3', sans-serif", fontSize: 12.5, padding: "4px 0", color: CREAM }}>
       <span>{name}</span>
       <span style={{ color: "rgba(201,168,76,0.6)" }}>
         {reviewed ? `${reviewed} reviewed · ${pct}% correct` : "no data yet"}
