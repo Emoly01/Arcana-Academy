@@ -10,6 +10,7 @@ import {
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
+import { exportUserData } from "./export/exportData";
 
 // ─── FIREBASE CONFIG ───
 const firebaseConfig = {
@@ -1089,6 +1090,19 @@ export default function App() {
   const [customPool, setCustomPool] = useState(null);
   const [guessed, setGuessed] = useState(false);
   const resultShownAt = useRef(0);
+  const [exportState, setExportState] = useState("idle"); // idle | working | done | error
+
+  const handleExport = useCallback(async () => {
+    if (!user) return;
+    setExportState("working");
+    try {
+      await exportUserData(db, user.uid);
+      setExportState("done");
+    } catch (err) {
+      console.error("Export error:", err);
+      setExportState("error");
+    }
+  }, [user]);
 
   // Read-aloud for the Study section — same English-voice TTS as Voice Drill.
   const { speak: speakText, cancel: cancelSpeech, supported: ttsSupported } = useSpeech();
@@ -2974,6 +2988,15 @@ export default function App() {
                 ))}
               </div>
             </div>
+
+            {/* Safety net: a full JSON snapshot of tarot + study-deck data. */}
+            <ChevronRow
+              label={exportState === "working" ? "Gathering your data…"
+                : exportState === "done" ? "Exported — check your downloads"
+                : exportState === "error" ? "Export failed — tap to retry"
+                : "Export my data (JSON)"}
+              onClick={exportState === "working" ? undefined : handleExport}
+            />
 
             <Finial />
           </div>
