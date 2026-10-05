@@ -16,6 +16,10 @@ import {
 } from "./engine/srs";
 import { fuzzyMatch, scoreRecall } from "./engine/match";
 import { shuffle } from "./engine/random";
+import { useDecks, writeCardSrs } from "./decks/store";
+import { deckCards } from "./decks/model";
+import { makeDeckVoiceAdapter, buildDeckVoiceQueue, scoreDeckRecall } from "./decks/voiceAdapter";
+import DecksTab from "./decks/DecksTab";
 
 // ─── FIREBASE CONFIG ───
 const firebaseConfig = {
@@ -906,8 +910,13 @@ export default function App() {
   };
 
   const { data: cloudData, loading: dataLoading, save } = useFirestoreSync(user?.uid);
+  const { decks, loading: decksLoading, error: decksError } = useDecks(db, user?.uid);
 
   const [screen, setScreen] = useState("home");
+  // Study decks: sub-view inside the Decks tab, and which deck Voice Drill is
+  // running (null = tarot).
+  const [deckView, setDeckView] = useState({ name: "list" });
+  const [voiceDeckId, setVoiceDeckId] = useState(null);
   // Persistent tabs: Today / Journey / Practice / Progress are always one tap
   // away instead of buried at the end of a long scroll.
   const [homeTab, setHomeTab] = useState("today");
@@ -1198,9 +1207,14 @@ export default function App() {
     }
     setStudyCard(null);
     setEditingNote(false);
+    // Tapping Decks while already there returns to the deck list; leaving a
+    // deck review parks on that deck's page instead of restarting the sitting.
+    if (tab === "decks" && screen === "home" && homeTab === "decks") setDeckView({ name: "list" });
+    else if (tab !== "decks") setDeckView(v => (v.name === "review" ? { name: "deck", deckId: v.deckId } : v));
+    setVoiceDeckId(null);
     setHomeTab(tab);
     setScreen("home");
-  }, [screen, sessionTotal, totalSessions, srsData, unlockedMinor, bestStreak, saveRef]);
+  }, [screen, homeTab, sessionTotal, totalSessions, srsData, unlockedMinor, bestStreak, saveRef]);
 
   // ─── VOICE DRILL INTEGRATION ───
   // Pull an SRS-ordered queue for the chosen deck (due cards first, most overdue
@@ -1227,6 +1241,28 @@ export default function App() {
 
   // Score a spoken recall against a card's meanings — reuses the free-recall scorer.
   const scoreAnswer = useCallback((text, card, isUpright) => scoreRecall(text, isUpright ? card.upright : card.reversed), []);
+
+  // ─── STUDY-DECK VOICE DRILL ───
+  // Same drill, fed through a deck adapter; grades write to that deck's SRS.
+  const voiceDeck = voiceDeckId ? decks.find(d => d.id === voiceDeckId) : null;
+  const voiceDeckAdapter = useMemo(() => (voiceDeck ? makeDeckVoiceAdapter(voiceDeck) : null),
+    [voiceDeck?.id, voiceDeck?.name, voiceDeck?.language]); // eslint-disable-line react-hooks/exhaustive-deps
+  const buildDeckVoice = useCallback(() => (voiceDeck ? buildDeckVoiceQueue(deckCards(voiceDeck), voiceDeck.srs || {}) : []), [voiceDeck]);
+  const handleDeckVoiceGrade = useCallback((cardId, correct, confidenceLevel) => {
+    if (!voiceDeck || !user) return;
+    const srsConfidence = correct ? (confidenceLevel === "geraten" ? "lucky" : "knew") : "wrong";
+    const next = updateSRS(voiceDeck.srs?.[cardId] || getInitialSRS(), correct, srsConfidence);
+    writeCardSrs(db, user.uid, voiceDeck.id, cardId, next).catch(err => console.error("Voice save error:", err));
+  }, [voiceDeck, user]);
+  const startDeckVoice = useCallback((deckId) => {
+    setVoiceDeckId(deckId);
+    setScreen("voice");
+  }, []);
+  const exitDeckVoice = useCallback(() => {
+    const id = voiceDeckId;
+    goTab("decks");
+    setDeckView(id ? { name: "deck", deckId: id } : { name: "list" });
+  }, [voiceDeckId, goTab]);
 
   const handleUnlockMinor = useCallback(() => {
     setUnlockedMinor(true);
@@ -1681,6 +1717,13 @@ export default function App() {
         .type-input { width: 100%; padding: 14px 16px; background: rgba(201,168,76,0.04); border: 1px solid rgba(201,168,76,0.2); border-radius: 12px; color: #e8dcc8; font-family: 'Source Sans 3', sans-serif; font-size: 14px; font-weight: 400; resize: vertical; min-height: 80px; outline: none; transition: border-color 0.2s; }
         .type-input:focus { border-color: rgba(201,168,76,0.5); }
         .type-input::placeholder { color: rgba(201,168,76,0.25); }
+        /* ─── Study decks: German-safe text (umlauts, long compounds) ─── */
+        .study-text { overflow-wrap: anywhere; word-break: normal; -webkit-hyphens: auto; hyphens: auto; }
+        .clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .deck-input { width: 100%; padding: 12px 14px; background: rgba(201,168,76,0.04); border: 1px solid rgba(201,168,76,0.2); border-radius: 12px; color: #e8dcc8; font-family: 'Source Sans 3', sans-serif; font-size: 15px; outline: none; transition: border-color 0.2s; }
+        .deck-input:focus { border-color: rgba(201,168,76,0.5); }
+        .deck-input::placeholder { color: rgba(201,168,76,0.3); }
+        .nav-btn:disabled { opacity: 0.45; cursor: default; }
         * { box-sizing: border-box; }
         ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.2); border-radius: 3px; }
         body { margin: 0; background: #07060A; }
@@ -2072,7 +2115,17 @@ export default function App() {
         )}
 
         {/* ═══ VOICE DRILL ═══ */}
-        {screen === "voice" && (
+        {screen === "voice" && voiceDeck && voiceDeckAdapter && (
+          <VoiceDrillMode
+            key={voiceDeck.id}
+            adapter={voiceDeckAdapter}
+            buildQueue={buildDeckVoice}
+            onGrade={handleDeckVoiceGrade}
+            onExit={exitDeckVoice}
+            scoreAnswer={scoreDeckRecall}
+          />
+        )}
+        {screen === "voice" && !voiceDeckId && (
           <VoiceDrillMode
             buildQueue={buildVoiceQueue}
             onGrade={handleVoiceGrade}
@@ -2860,6 +2913,18 @@ export default function App() {
 
             <Finial />
           </div>
+        )}
+
+        {/* ═══ DECKS ═══ */}
+        {screen === "home" && homeTab === "decks" && (
+          <DecksTab
+            db={db} uid={user.uid}
+            decks={decks} loading={decksLoading} error={decksError}
+            view={deckView} setView={setDeckView}
+            tarot={{ total: availableCards.length, due: dueCards.length }}
+            onOpenTarot={() => goTab("today")}
+            onStartVoice={startDeckVoice}
+          />
         )}
 
         {/* ═══ QUICK REFERENCE ═══ */}
