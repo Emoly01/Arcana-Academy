@@ -224,6 +224,7 @@ export const TABS = [
   { key: "journey", label: "JOURNEY", icon: "book" },
   { key: "practice", label: "PRACTICE", icon: "cards" },
   { key: "progress", label: "PROGRESS", icon: "bars" },
+  { key: "decks", label: "DECKS", icon: "books" },
 ];
 
 export function TabBar({ active, onSelect, variant = "bottom" }) {
@@ -240,7 +241,7 @@ export function TabBar({ active, onSelect, variant = "bottom" }) {
       <div style={{
         display: rail ? "flex" : "grid",
         flexDirection: rail ? "column" : undefined,
-        gridTemplateColumns: rail ? undefined : "repeat(4,1fr)",
+        gridTemplateColumns: rail ? undefined : `repeat(${TABS.length},1fr)`,
         gap: rail ? 4 : 0,
         maxWidth: rail ? undefined : 560, margin: rail ? undefined : "0 auto",
       }}>
@@ -263,7 +264,7 @@ export function TabBar({ active, onSelect, variant = "bottom" }) {
             >
               <Icon name={t.icon} size={21} color={on ? C.goldBright : C.goldFaint} stroke={1.4} />
               <span style={{
-                fontFamily: FONT_SANS, fontSize: 10.5, letterSpacing: ".14em",
+                fontFamily: FONT_SANS, fontSize: 10.5, letterSpacing: rail ? ".14em" : ".08em",
                 color: on ? C.goldBright : C.goldFaint,
               }}>{t.label}</span>
             </button>

@@ -14,6 +14,21 @@ const CONF_META = {
   geraten:  { label: "Geraten",  sub: "guessed",   color: RED },
 };
 
+// How the drill reads a card aloud and shows it. Tarot is the default; study
+// decks pass their own adapter (front as prompt, back as answer, no
+// orientation, German voice). Items are always { card, isUpright }.
+export const TAROT_VOICE_ADAPTER = {
+  ttsLang: "en",
+  textClass: undefined, // study decks use "study-text" (hyphenation + safe wrapping)
+  title: null,
+  showPoolPicker: true,
+  promptOf: (item) => item.card.name,
+  meaningsOf: (item) => (item.isUpright ? item.card.upright : item.card.reversed),
+  answerTextOf: (item) => (item.isUpright ? item.card.upright : item.card.reversed).join(" · "),
+  readoutOf: (item) => `${(item.isUpright ? item.card.upright : item.card.reversed).join(", ")}. ${item.card.keywords}`,
+  detailOf: (item) => item.card.keywords,
+};
+
 function orientationToUpright(orientation) {
   if (orientation === "upright") return true;
   if (orientation === "reversed") return false;
@@ -30,9 +45,10 @@ function orientationToUpright(orientation) {
 export default function VoiceDrillMode({
   buildQueue, onGrade, onExit, modeStats, scoreAnswer,
   unlockedMinor, defaultDeck = "all", defaultOrientation = "both",
+  adapter = TAROT_VOICE_ADAPTER,
 }) {
   const recognitionSupported = !!getSpeechRecognition();
-  const { speak, cancel, supported: ttsSupported, hasEnglishVoice, voicesReady } = useSpeech();
+  const { speak, cancel, supported: ttsSupported, hasEnglishVoice, voicesReady } = useSpeech(adapter.ttsLang);
   const supported = recognitionSupported && ttsSupported;
 
   // ── setup choices (start screen) ──
@@ -91,8 +107,7 @@ export default function VoiceDrillMode({
   const guardActive = () =>
     mountedRef.current && !pausedRef.current && phaseRef.current === "running";
 
-  const meaningsOf = (item) => (item.isUpright ? item.card.upright : item.card.reversed);
-  const readoutOf = (item) => `${meaningsOf(item).join(", ")}. ${item.card.keywords}`;
+  const readoutOf = (item) => adapter.readoutOf(item);
 
   // Re-assign the flow functions on every render so they always close over the
   // latest props while being invoked through a stable ref.
@@ -116,7 +131,7 @@ export default function VoiceDrillMode({
     setPendingGrade(null);
     setNeedConfidence(false);
     stepRef.current = "asking"; setStep("asking");
-    await fns.current.speakAndPause(item.card.name, { rate: 0.95 });
+    await fns.current.speakAndPause(adapter.promptOf(item), { rate: 0.95 });
     if (!guardActive()) return;
     const nextStep = recallModeRef.current === "spoken" ? "listen-answer" : "listen-reveal";
     stepRef.current = nextStep; setStep(nextStep);
@@ -168,7 +183,7 @@ export default function VoiceDrillMode({
     } else {
       const back = recallModeRef.current === "spoken" ? "listen-answer" : "listen-reveal";
       stepRef.current = "asking"; setStep("asking");
-      await fns.current.speakAndPause(item.card.name, { rate: 0.95 });
+      await fns.current.speakAndPause(adapter.promptOf(item), { rate: 0.95 });
       if (!guardActive()) return;
       stepRef.current = back; setStep(back);
       fns.current.startListening();
@@ -180,7 +195,7 @@ export default function VoiceDrillMode({
     if (!item) return;
     rec.stop();
     onGrade(item.card.id, correct, confidence);
-    sessionRef.current.items.push({ name: item.card.name, correct, confidence });
+    sessionRef.current.items.push({ name: adapter.promptOf(item), correct, confidence });
     setSessionItems([...sessionRef.current.items]);
     pendingRef.current = { grade: null, confidence: null, proposed: false };
     setPendingGrade(null);
@@ -332,7 +347,7 @@ export default function VoiceDrillMode({
         <button className="nav-btn nav-btn-ghost" style={{ padding: "8px 14px", fontSize: 11 }}
           onClick={() => { fns.current.finish(); onExit(); }}>← Back</button>
         <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 500, letterSpacing: 2, color: GOLD }}>
-          🎙 Voice Drill · Sprachmodus
+          {adapter.title ? <>🎙 Voice Drill · <span lang={adapter.ttsLang} className={adapter.textClass}>{adapter.title}</span></> : "🎙 Voice Drill · Sprachmodus"}
         </h2>
       </div>
     </>
@@ -365,6 +380,7 @@ export default function VoiceDrillMode({
           deck={deck} setDeck={setDeck}
           orientation={orientation} setOrientation={setOrientation}
           unlockedMinor={unlockedMinor}
+          showPoolPicker={adapter.showPoolPicker} ttsLang={adapter.ttsLang}
           voicesReady={voicesReady} hasEnglishVoice={hasEnglishVoice}
           onBegin={beginSession}
         />
@@ -372,7 +388,7 @@ export default function VoiceDrillMode({
 
       {phase === "running" && (
         <RunningView
-          card={card} step={step} paused={paused} revealed={revealed}
+          card={card} adapter={adapter} step={step} paused={paused} revealed={revealed}
           recallMode={recallModeRef.current}
           listening={rec.listening} micError={rec.error} lastHeard={lastHeard}
           needConfidence={needConfidence} pendingGrade={pendingGrade}
@@ -398,6 +414,7 @@ export default function VoiceDrillMode({
 function ReadyView({
   recallMode, setRecallMode, deck, setDeck, orientation, setOrientation,
   unlockedMinor, voicesReady, hasEnglishVoice, onBegin,
+  showPoolPicker = true, ttsLang = "en",
 }) {
   const deckOptions = [
     { key: "all", label: unlockedMinor ? "All 78" : "All" },
@@ -448,6 +465,7 @@ function ReadyView({
         </div>
       </div>
 
+      {showPoolPicker && <>
       {/* Deck */}
       <div style={{ marginBottom: 14 }}>
         <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(201,168,76,0.35)", letterSpacing: 1, marginBottom: 8 }}>CARD POOL</div>
@@ -467,12 +485,15 @@ function ReadyView({
           ))}
         </div>
       </div>
+      </>}
 
       <CommandCheatSheet spoken={recallMode === "spoken"} />
 
       {voicesReady && !hasEnglishVoice && (
         <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, color: "rgba(220,53,69,0.7)", margin: "12px 2px", fontWeight: 300 }}>
-          ⚠ No English voice found on this device — falling back to the system default. Card names may sound off.
+          {ttsLang === "de"
+            ? "⚠ No German voice found on this device — falling back to the system default. Cards may sound off."
+            : "⚠ No English voice found on this device — falling back to the system default. Card names may sound off."}
         </div>
       )}
       <button className="nav-btn nav-btn-primary" style={{ width: "100%", padding: "16px", fontSize: 15, marginTop: 14 }} onClick={onBegin}>
@@ -554,11 +575,16 @@ function BigTap({ label, sub, onClick, tone = "gold", disabled }) {
 }
 
 function RunningView({
-  card, step, paused, revealed, recallMode, listening, micError, lastHeard,
+  card, adapter = TAROT_VOICE_ADAPTER, step, paused, revealed, recallMode, listening, micError, lastHeard,
   needConfidence, pendingGrade, scoreResult, liveMatched, reviewed,
   onReveal, onGrade, onConfidence, onAcceptNext, onRepeat, onPauseResume, onStop, onRetryMic,
 }) {
-  const meanings = card ? (card.isUpright ? card.card.upright : card.card.reversed) : [];
+  const meanings = card ? adapter.meaningsOf(card) : [];
+  const promptText = card ? adapter.promptOf(card) : "…";
+  // Tarot names top out around 20 characters; study-card fronts can be whole
+  // sentences, so the size steps down further and switches to the sans face.
+  const textCls = adapter.textClass;
+  const promptSize = promptText.length > 100 ? 18 : promptText.length > 40 ? 24 : promptText.length > 16 ? 30 : 38;
   const spoken = recallMode === "spoken";
   const inGrade = step === "listen-grade" || step === "revealing";
   return (
@@ -577,14 +603,15 @@ function RunningView({
         <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 11, letterSpacing: 2, color: "rgba(201,168,76,0.4)", marginBottom: 10 }}>
           {reviewed} REVIEWED {card && card.isUpright === false ? "· REVERSED" : ""}
         </div>
-        <div style={{
-          fontFamily: "'Cormorant Garamond', serif", fontWeight: 600, letterSpacing: 1, lineHeight: 1.15,
-          fontSize: card && card.card.name.length > 16 ? 30 : 38,
+        <div className={textCls} lang={adapter.ttsLang} style={{
+          fontFamily: promptSize <= 18 ? "'Source Sans 3', sans-serif" : "'Cormorant Garamond', serif",
+          fontWeight: promptSize <= 18 ? 500 : 600, letterSpacing: promptSize <= 24 ? 0 : 1, lineHeight: promptSize >= 30 ? 1.15 : 1.3,
+          fontSize: promptSize,
           background: "linear-gradient(135deg, #c9a84c, #e8dcc8, #c9a84c)", backgroundSize: "200%",
           WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
           minHeight: 50, padding: "0 8px",
         }}>
-          {card ? card.card.name : "…"}
+          {promptText}
         </div>
         <div style={{ marginTop: 12 }}>
           <StatusPill paused={paused} listening={listening} step={step} />
@@ -598,8 +625,8 @@ function RunningView({
             {meanings.map((m) => {
               const hit = liveMatched.includes(m);
               return (
-                <span key={m} style={{
-                  padding: "5px 11px", borderRadius: 16, fontFamily: "'Source Sans 3', sans-serif", fontSize: 12,
+                <span key={m} className={textCls} lang={adapter.ttsLang} style={{
+                  padding: "5px 11px", borderRadius: 16, ...(textCls ? { maxWidth: "100%" } : {}), fontFamily: "'Source Sans 3', sans-serif", fontSize: 12,
                   background: hit ? `${GREEN}0.15)` : "rgba(201,168,76,0.05)",
                   border: `1px solid ${hit ? `${GREEN}0.5)` : "rgba(201,168,76,0.12)"}`,
                   color: hit ? "#d4f5d6" : "rgba(201,168,76,0.35)",
@@ -628,17 +655,19 @@ function RunningView({
                 YOU RECALLED {scoreResult.matched.length} / {scoreResult.total}
               </div>
             )}
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 17, color: CREAM, lineHeight: 1.6 }}>
+            <div className={textCls} lang={adapter.ttsLang} style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 17, color: CREAM, lineHeight: 1.6, ...(textCls ? { whiteSpace: "pre-wrap" } : {}) }}>
               {spoken && scoreResult
                 ? meanings.map((m) => {
                     const hit = scoreResult.matched.some((x) => x.meaning === m);
                     return <span key={m} style={{ color: hit ? "#d4f5d6" : "rgba(232,220,200,0.55)", textDecoration: hit ? "none" : "none" }}>{hit ? "✓ " : "✗ "}{m}<span style={{ color: "rgba(201,168,76,0.3)" }}> · </span></span>;
                   })
-                : meanings.join(" · ")}
+                : adapter.answerTextOf(card)}
             </div>
-            <div style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.55)", marginTop: 8, fontStyle: "italic", fontWeight: 300 }}>
-              {card.card.keywords}
-            </div>
+            {adapter.detailOf(card) && (
+              <div className={textCls} lang={adapter.ttsLang} style={{ fontFamily: "'Source Sans 3', sans-serif", fontSize: 12, color: "rgba(201,168,76,0.55)", marginTop: 8, fontStyle: "italic", fontWeight: 300, whiteSpace: "pre-wrap" }}>
+                {adapter.detailOf(card)}
+              </div>
+            )}
           </>
         ) : (
           !(spoken && step === "listen-answer") && (

@@ -10,6 +10,16 @@ import {
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
+import { exportUserData } from "./export/exportData";
+import {
+  SRS_VERSION, getInitialSRS, updateSRS, migrateSrsToDaily, tallyModeStats, getMasteryLevel,
+} from "./engine/srs";
+import { fuzzyMatch, scoreRecall } from "./engine/match";
+import { shuffle } from "./engine/random";
+import { useDecks, writeCardSrs } from "./decks/store";
+import { deckCards } from "./decks/model";
+import { makeDeckVoiceAdapter, buildDeckVoiceQueue, scoreDeckRecall } from "./decks/voiceAdapter";
+import DecksTab from "./decks/DecksTab";
 
 // ─── FIREBASE CONFIG ───
 const firebaseConfig = {
@@ -476,152 +486,7 @@ function CardImage({ card, isUpright = true, width = 110, hideName = false, crop
   );
 }
 
-// ─── SRS ───
-// Intervals are counted in days (SRS_VERSION 3), so mastered cards return
-// tomorrow / in 3 days / in a week instead of within the same sitting. A
-// failed card comes back after a short relearn delay so it can still be
-// re-drilled inside the current session.
-const SRS_VERSION = 3;
-const DAY_MS = 24 * 60 * 60 * 1000;
-const RELEARN_MS = 10 * 60 * 1000;
-
-function getInitialSRS() {
-  return { interval: 1, ease: 2.5, nextReview: 0, streak: 0, totalCorrect: 0, totalAttempts: 0 };
-}
-
-function updateSRS(card, correct, confidence = "knew") {
-  const now = Date.now();
-  let { interval, ease, streak, totalCorrect, totalAttempts } = card;
-  totalAttempts++;
-  if (correct) {
-    totalCorrect++; streak++;
-    if (confidence === "lucky") {
-      interval = 1;
-      ease = Math.max(1.3, ease - 0.1);
-    } else {
-      if (streak === 1) interval = 1;
-      else if (streak === 2) interval = 3;
-      else interval = Math.min(Math.round(interval * ease), 180);
-      ease = Math.min(3.0, ease + 0.1);
-    }
-    return { ...card, interval, ease, streak, totalCorrect, totalAttempts, nextReview: now + interval * DAY_MS };
-  }
-  streak = 0; interval = 1;
-  ease = Math.max(1.3, ease - 0.2);
-  return { ...card, interval, ease, streak, totalCorrect, totalAttempts, nextReview: now + RELEARN_MS };
-}
-
-// Pre-v3 data scheduled reviews in minutes; reinterpreting those intervals as
-// days would push cards weeks out, so reset the schedule but keep the history.
-function migrateSrsToDaily(srsData) {
-  const migrated = {};
-  for (const [id, s] of Object.entries(srsData)) {
-    migrated[id] = { ...s, interval: 1, nextReview: 0 };
-  }
-  return migrated;
-}
-
-// Aggregate per-mode stats so the visual quiz and Voice Drill can be compared
-// later. Buckets by the raw confidence label the user expressed (voice) or an
-// equivalent tag (quiz), plus overall reviewed/correct counts.
-function tallyModeStats(stats, mode, correct, confidenceLevel) {
-  const s = { ...(stats || {}) };
-  const m = { reviewed: 0, correct: 0, byConfidence: {}, ...(s[mode] || {}) };
-  m.byConfidence = { ...(m.byConfidence || {}) };
-  m.reviewed += 1;
-  if (correct) m.correct += 1;
-  const key = confidenceLevel || "unspecified";
-  const b = { total: 0, correct: 0, ...(m.byConfidence[key] || {}) };
-  b.total += 1;
-  if (correct) b.correct += 1;
-  m.byConfidence[key] = b;
-  s[mode] = m;
-  return s;
-}
-
-function getMasteryLevel(srs) {
-  if (srs.totalAttempts === 0) return { level: 0, label: "Unknown", icon: "◇" };
-  const ratio = srs.totalCorrect / srs.totalAttempts;
-  if (ratio >= 0.9 && srs.streak >= 5) return { level: 4, label: "Mastered", icon: "◆" };
-  if (ratio >= 0.75 && srs.streak >= 3) return { level: 3, label: "Confident", icon: "◈" };
-  if (ratio >= 0.5) return { level: 2, label: "Learning", icon: "◇" };
-  return { level: 1, label: "Struggling", icon: "○" };
-}
-
-// ─── FUZZY MATCH ───
-function normalize(str) {
-  return str.toLowerCase().replace(/[^a-z ]/g, "").trim();
-}
-
-function fuzzyMatch(input, target) {
-  const a = normalize(input);
-  const b = normalize(target);
-  if (a === b) return 1;
-  if (b.includes(a) || a.includes(b)) return 0.85;
-  // Check if words overlap
-  const aWords = a.split(/\s+/);
-  const bWords = b.split(/\s+/);
-  const matches = aWords.filter(w => bWords.some(bw => bw.startsWith(w) || w.startsWith(bw) || levenshtein(w, bw) <= 2));
-  if (bWords.length === 0) return 0;
-  return matches.length / bWords.length;
-}
-
-function levenshtein(a, b) {
-  const m = a.length, n = b.length;
-  const d = Array.from({ length: m + 1 }, (_, i) => [i]);
-  for (let j = 1; j <= n; j++) d[0][j] = j;
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      d[i][j] = Math.min(
-        d[i - 1][j] + 1,
-        d[i][j - 1] + 1,
-        d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
-      );
-    }
-  }
-  return d[m][n];
-}
-
-function scoreTypedAnswer(input, card, isUpright) {
-  const meanings = isUpright ? card.upright : card.reversed;
-  const inputParts = input.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
-  if (inputParts.length === 0) return { score: 0, matched: [], missed: meanings, total: meanings.length };
-
-  const matched = [];
-  const used = new Set();
-
-  for (const part of inputParts) {
-    let bestMatch = null;
-    let bestScore = 0;
-    for (let i = 0; i < meanings.length; i++) {
-      if (used.has(i)) continue;
-      const s = fuzzyMatch(part, meanings[i]);
-      if (s > bestScore && s >= 0.5) {
-        bestScore = s;
-        bestMatch = i;
-      }
-    }
-    if (bestMatch !== null) {
-      matched.push({ input: part, meaning: meanings[bestMatch], score: bestScore });
-      used.add(bestMatch);
-    }
-  }
-
-  const missed = meanings.filter((_, i) => !used.has(i));
-  const score = matched.length / meanings.length;
-  return { score, matched, missed, total: meanings.length };
-}
-
 // ─── QUIZ HELPERS ───
-function shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
 const MAJOR_NEIGHBORS = {
    0: [ 1, 12, 17, 20],  // Fool           → Magician, Hanged Man, Star, Judgement
    1: [ 7, 21,  0],      // Magician       → Chariot, World, Fool
@@ -651,7 +516,7 @@ const MINOR_RANKS = ['Ace','Two','Three','Four','Five','Six','Seven',
                      'Eight','Nine','Ten','Page','Knight','Queen','King'];
 
 function pickDistractors(correct, pool, count = 3) {
-  const norm = s => s.toLowerCase().replace(/[^a-z]/g, '');
+  const norm = s => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
   const correctKws = new Set([...correct.upright, ...correct.reversed].map(norm));
   const balanceOk = c => {
     const cKws = [...c.upright, ...c.reversed].map(norm);
@@ -1045,8 +910,13 @@ export default function App() {
   };
 
   const { data: cloudData, loading: dataLoading, save } = useFirestoreSync(user?.uid);
+  const { decks, loading: decksLoading, error: decksError } = useDecks(db, user?.uid);
 
   const [screen, setScreen] = useState("home");
+  // Study decks: sub-view inside the Decks tab, and which deck Voice Drill is
+  // running (null = tarot).
+  const [deckView, setDeckView] = useState({ name: "list" });
+  const [voiceDeckId, setVoiceDeckId] = useState(null);
   // Persistent tabs: Today / Journey / Practice / Progress are always one tap
   // away instead of buried at the end of a long scroll.
   const [homeTab, setHomeTab] = useState("today");
@@ -1089,6 +959,19 @@ export default function App() {
   const [customPool, setCustomPool] = useState(null);
   const [guessed, setGuessed] = useState(false);
   const resultShownAt = useRef(0);
+  const [exportState, setExportState] = useState("idle"); // idle | working | done | error
+
+  const handleExport = useCallback(async () => {
+    if (!user) return;
+    setExportState("working");
+    try {
+      await exportUserData(db, user.uid);
+      setExportState("done");
+    } catch (err) {
+      console.error("Export error:", err);
+      setExportState("error");
+    }
+  }, [user]);
 
   // Read-aloud for the Study section — same English-voice TTS as Voice Drill.
   const { speak: speakText, cancel: cancelSpeech, supported: ttsSupported } = useSpeech();
@@ -1324,9 +1207,14 @@ export default function App() {
     }
     setStudyCard(null);
     setEditingNote(false);
+    // Tapping Decks while already there returns to the deck list; leaving a
+    // deck review parks on that deck's page instead of restarting the sitting.
+    if (tab === "decks" && screen === "home" && homeTab === "decks") setDeckView({ name: "list" });
+    else if (tab !== "decks") setDeckView(v => (v.name === "review" ? { name: "deck", deckId: v.deckId } : v));
+    setVoiceDeckId(null);
     setHomeTab(tab);
     setScreen("home");
-  }, [screen, sessionTotal, totalSessions, srsData, unlockedMinor, bestStreak, saveRef]);
+  }, [screen, homeTab, sessionTotal, totalSessions, srsData, unlockedMinor, bestStreak, saveRef]);
 
   // ─── VOICE DRILL INTEGRATION ───
   // Pull an SRS-ordered queue for the chosen deck (due cards first, most overdue
@@ -1352,7 +1240,29 @@ export default function App() {
   }, [recordAnswer]);
 
   // Score a spoken recall against a card's meanings — reuses the free-recall scorer.
-  const scoreAnswer = useCallback((text, card, isUpright) => scoreTypedAnswer(text, card, isUpright), []);
+  const scoreAnswer = useCallback((text, card, isUpright) => scoreRecall(text, isUpright ? card.upright : card.reversed), []);
+
+  // ─── STUDY-DECK VOICE DRILL ───
+  // Same drill, fed through a deck adapter; grades write to that deck's SRS.
+  const voiceDeck = voiceDeckId ? decks.find(d => d.id === voiceDeckId) : null;
+  const voiceDeckAdapter = useMemo(() => (voiceDeck ? makeDeckVoiceAdapter(voiceDeck) : null),
+    [voiceDeck?.id, voiceDeck?.name, voiceDeck?.language]); // eslint-disable-line react-hooks/exhaustive-deps
+  const buildDeckVoice = useCallback(() => (voiceDeck ? buildDeckVoiceQueue(deckCards(voiceDeck), voiceDeck.srs || {}) : []), [voiceDeck]);
+  const handleDeckVoiceGrade = useCallback((cardId, correct, confidenceLevel) => {
+    if (!voiceDeck || !user) return;
+    const srsConfidence = correct ? (confidenceLevel === "geraten" ? "lucky" : "knew") : "wrong";
+    const next = updateSRS(voiceDeck.srs?.[cardId] || getInitialSRS(), correct, srsConfidence);
+    writeCardSrs(db, user.uid, voiceDeck.id, cardId, next).catch(err => console.error("Voice save error:", err));
+  }, [voiceDeck, user]);
+  const startDeckVoice = useCallback((deckId) => {
+    setVoiceDeckId(deckId);
+    setScreen("voice");
+  }, []);
+  const exitDeckVoice = useCallback(() => {
+    const id = voiceDeckId;
+    goTab("decks");
+    setDeckView(id ? { name: "deck", deckId: id } : { name: "list" });
+  }, [voiceDeckId, goTab]);
 
   const handleUnlockMinor = useCallback(() => {
     setUnlockedMinor(true);
@@ -1807,6 +1717,13 @@ export default function App() {
         .type-input { width: 100%; padding: 14px 16px; background: rgba(201,168,76,0.04); border: 1px solid rgba(201,168,76,0.2); border-radius: 12px; color: #e8dcc8; font-family: 'Source Sans 3', sans-serif; font-size: 14px; font-weight: 400; resize: vertical; min-height: 80px; outline: none; transition: border-color 0.2s; }
         .type-input:focus { border-color: rgba(201,168,76,0.5); }
         .type-input::placeholder { color: rgba(201,168,76,0.25); }
+        /* ─── Study decks: German-safe text (umlauts, long compounds) ─── */
+        .study-text { overflow-wrap: anywhere; word-break: normal; -webkit-hyphens: auto; hyphens: auto; }
+        .clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .deck-input { width: 100%; padding: 12px 14px; background: rgba(201,168,76,0.04); border: 1px solid rgba(201,168,76,0.2); border-radius: 12px; color: #e8dcc8; font-family: 'Source Sans 3', sans-serif; font-size: 15px; outline: none; transition: border-color 0.2s; }
+        .deck-input:focus { border-color: rgba(201,168,76,0.5); }
+        .deck-input::placeholder { color: rgba(201,168,76,0.3); }
+        .nav-btn:disabled { opacity: 0.45; cursor: default; }
         * { box-sizing: border-box; }
         ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.2); border-radius: 3px; }
         body { margin: 0; background: #07060A; }
@@ -2198,7 +2115,17 @@ export default function App() {
         )}
 
         {/* ═══ VOICE DRILL ═══ */}
-        {screen === "voice" && (
+        {screen === "voice" && voiceDeck && voiceDeckAdapter && (
+          <VoiceDrillMode
+            key={voiceDeck.id}
+            adapter={voiceDeckAdapter}
+            buildQueue={buildDeckVoice}
+            onGrade={handleDeckVoiceGrade}
+            onExit={exitDeckVoice}
+            scoreAnswer={scoreDeckRecall}
+          />
+        )}
+        {screen === "voice" && !voiceDeckId && (
           <VoiceDrillMode
             buildQueue={buildVoiceQueue}
             onGrade={handleVoiceGrade}
@@ -2975,8 +2902,29 @@ export default function App() {
               </div>
             </div>
 
+            {/* Safety net: a full JSON snapshot of tarot + study-deck data. */}
+            <ChevronRow
+              label={exportState === "working" ? "Gathering your data…"
+                : exportState === "done" ? "Exported — check your downloads"
+                : exportState === "error" ? "Export failed — tap to retry"
+                : "Export my data (JSON)"}
+              onClick={exportState === "working" ? undefined : handleExport}
+            />
+
             <Finial />
           </div>
+        )}
+
+        {/* ═══ DECKS ═══ */}
+        {screen === "home" && homeTab === "decks" && (
+          <DecksTab
+            db={db} uid={user.uid}
+            decks={decks} loading={decksLoading} error={decksError}
+            view={deckView} setView={setDeckView}
+            tarot={{ total: availableCards.length, due: dueCards.length }}
+            onOpenTarot={() => goTab("today")}
+            onStartVoice={startDeckVoice}
+          />
         )}
 
         {/* ═══ QUICK REFERENCE ═══ */}

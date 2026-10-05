@@ -1,0 +1,10 @@
+Testkarte 1 – Was ist Platzhalter Alpha? | Antwort Alpha: erste Platzhalterantwort | Nur eine Testnotiz | gruppe-a
+Testkarte 2 – Was ist Platzhalter Beta? | Antwort Beta: zweite Platzhalterantwort | | gruppe-a
+Testkarte 3 – Was ist Platzhalter Gamma? | Antwort Gamma: dritte Platzhalterantwort | | gruppe-a
+Testkarte 4 – Was ist Platzhalter Delta? | Antwort Delta: vierte Platzhalterantwort | | gruppe-a
+Testkarte 5 – Was ist Platzhalter Epsilon? | Antwort Epsilon: fünfte Platzhalterantwort | | gruppe-b
+Testkarte 6 – Was ist Platzhalter Zeta? | Antwort Zeta: sechste Platzhalterantwort | | gruppe-b
+Testkarte 7 – Was ist Platzhalter Eta? | Antwort Eta: siebte Platzhalterantwort | | gruppe-b
+Testkarte 8 – Umlaut-Test: Äpfel, Öl, Übung, Straße? | Größenänderungsüberprüfung, Süßwarenmaß, Ölkännchen | Notiz mit\nZeilenumbruch | gruppe-b
+Testkarte 9 – Donaudampfschifffahrtsgesellschaftskapitänsmützenabzeichen? | Rindfleischetikettierungsüberwachungsaufgabenübertragungsgesetz | Zwei absichtlich alberne lange Wörter zum Layout-Test | gruppe-c
+Testkarte 10 – Was ist Platzhalter Omega? | Antwort Omega: zehnte Platzhalterantwort | | gruppe-c
