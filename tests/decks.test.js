@@ -43,6 +43,26 @@ test("optional notes and tags columns, plus batch tags", () => {
   assert.deepEqual(c.tags, ["Platzhalter", "Test", "Stapel"]);
 });
 
+test("empty notes column keeps tags in the tags column", () => {
+  const r = parseBulkImport("Front | Back | | gruppe-a\nF2 | B2 |  | tag-x, tag-y\nF3 | B3 |");
+  assert.equal(r.rows[0].card.notes, "");
+  assert.deepEqual(r.rows[0].card.tags, ["gruppe-a"]);
+  assert.deepEqual(r.rows[1].card.tags, ["tag-x", "tag-y"]);
+  assert.equal(r.rows[2].card.back, "B3");
+  assert.equal(r.validCount, 3);
+});
+
+test("the placeholder batch parses into ten clean cards", async () => {
+  const { readFileSync } = await import("node:fs");
+  const text = readFileSync(new URL("../docs/placeholder-import.txt", import.meta.url), "utf8");
+  const r = parseBulkImport(text);
+  assert.equal(r.validCount, 10);
+  for (const row of r.rows) {
+    assert.ok(!row.card.notes.includes("|"), `line ${row.lineNo} notes: ${row.card.notes}`);
+    assert.equal(row.card.tags.length, 1, `line ${row.lineNo} tags`);
+  }
+});
+
 test("literal \\n becomes a line break", () => {
   const r = parseBulkImport("Frage | Zeile eins\\nZeile zwei");
   assert.equal(r.rows[0].card.back, "Zeile eins\nZeile zwei");

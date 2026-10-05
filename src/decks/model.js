@@ -103,13 +103,28 @@ export function frontKey(front) {
 // ─── BULK IMPORT ───
 // One card per line: front, back, optional notes, optional tags. Fields are
 // separated by a tab (wins if present — what spreadsheets paste) or by a pipe
-// with whitespace on both sides (" | ", or a trailing " |" for an empty last
-// field). A bare "|" inside text is left alone.
-const PIPE_SEP = /\s+\|(?:\s+|$)/;
+// with whitespace (or the line edge) on both sides: "a | b", "a | b | | tag",
+// "a | b |". A bare "|" inside text ("C|D") is left alone.
+function splitOnPipes(line) {
+  const fields = [];
+  let start = 0;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] !== "|") continue;
+    const before = i === 0 || /\s/.test(line[i - 1]);
+    const after = i === line.length - 1 || /\s/.test(line[i + 1]);
+    if (before && after) {
+      fields.push(line.slice(start, i));
+      start = i + 1;
+    }
+  }
+  fields.push(line.slice(start));
+  return fields.map((f) => f.trim());
+}
 
 export function splitImportLine(line) {
   if (line.includes("\t")) return { fields: line.split("\t"), separator: "tab" };
-  if (PIPE_SEP.test(line)) return { fields: line.split(PIPE_SEP), separator: "pipe" };
+  const fields = splitOnPipes(line);
+  if (fields.length > 1) return { fields, separator: "pipe" };
   return { fields: [line], separator: null };
 }
 
